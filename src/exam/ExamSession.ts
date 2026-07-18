@@ -215,6 +215,17 @@ export class ExamSession {
     return this.engine.points;
   }
 
+  /** 制限時間の経過秒（離陸指示の発話開始→現在。開始前はnull・接地後は確定値）。HUD表示用 */
+  get examElapsedS(): number | null {
+    if (this.examStartRel === null) return null;
+    return (this.touchedDownRel ?? this.prevRel) - this.examStartRel;
+  }
+
+  /** 課目の制限時間 [s]（HUD表示用） */
+  get timeLimitS(): number {
+    return this.course.timeLimitS;
+  }
+
   /** UIの中止操作（結果は不合格・aborted扱い） */
   abort(): void {
     if (!this.finished) this.finish('aborted');

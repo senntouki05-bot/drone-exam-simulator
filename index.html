@@ -9,18 +9,18 @@
     <div id="app">
       <div id="hud" aria-live="off">
         <div class="hud-title">二等無人航空機操縦士 実地試験シミュレータ</div>
-        <div class="hud-row"><span class="hud-label">課目</span><span id="hud-course">–</span></div>
+        <div class="hud-row hud-keep"><span class="hud-label">課目</span><span id="hud-course">–</span></div>
         <div class="hud-row"><span class="hud-label">高度</span><span id="hud-alt">0.0 m</span></div>
         <div class="hud-row"><span class="hud-label">速度</span><span id="hud-spd">0.0 m/s</span></div>
         <div class="hud-row"><span class="hud-label">モード</span><span id="hud-mode">GPS（位置安定ON）</span></div>
         <div class="hud-row"><span class="hud-label">風</span><span id="hud-wind">屋内（無風）</span></div>
         <div class="hud-row"><span class="hud-label">機体</span><span id="hud-machine">–</span></div>
-        <div class="hud-row"><span class="hud-label">時間</span><span id="hud-time">0:00</span></div>
+        <div class="hud-row hud-keep"><span class="hud-label">時間</span><span id="hud-time">0:00</span></div>
         <div class="hud-row"><span class="hud-label">入力</span><span id="hud-input">キーボード</span></div>
         <div class="hud-row"><span class="hud-label">区画</span><span id="hud-zone">–</span></div>
       </div>
       <div id="help">
-        操作（モード2配置）: <b>W/S</b>=上昇/下降　<b>A/D</b>=左/右旋回　<b>↑/↓</b>=前進/後退　<b>←/→</b>=左/右移動　<b>1/2/3</b>=課目　<b>Z</b>=区画表示　<b>M</b>=GPS/ATTI切替　<b>V</b>=風切替　<b>C</b>=機体切替　<b>R</b>=リセット
+        操作（モード2配置）: <b>W/S</b>=上昇/下降　<b>A/D</b>=左/右旋回　<b>↑/↓</b>=前進/後退　<b>←/→</b>=左/右移動　<b>Space</b>=宣言　<b>1/2/3</b>=課目　<b>Z</b>=区画表示　<b>M</b>=GPS/ATTI　<b>H</b>=最小HUD　<b>R</b>=リセット/中止
       </div>
       <div id="pause-overlay" hidden>
         <div class="pause-dialog">

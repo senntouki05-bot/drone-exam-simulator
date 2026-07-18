@@ -2,16 +2,19 @@
  * main.ts — 配線: GameLoop（固定240Hz＋描画補間）× 入力層（Gamepad/キーボード）
  * × M2飛行力学（FlightDynamics: カスケード制御・GPS/ATTI・風・機体プロファイル）
  * × M3コース（data/courses/*.json: 描画・操縦者視点・幾何判定の目視用HUD）
- * × M4受験（ExamSession: 課目FSM・採点・試験員指示。音声=InstructorVoice/ビープ=WarningBeep）。
+ * × M4受験（ExamSession: 課目FSM・採点・試験員指示）
+ * × M5仕上げ（ExamSeries=試験モード3課目通し・リプレイ・ミニマップ・スコア履歴・練習設定）。
+ *
+ * アプリモード（appMode）:
+ *   free     = 自由飛行（練習設定パネルすべて操作可）
+ *   practice = 課目単体の受験（練習モード扱い: 区画帯は表示可・ミニマップあり・リプレイ記録）
+ *   series   = 試験モード3課目通し（区画帯/ミニマップ非表示・カメラは操縦者定点固定・設定ロック）
+ *   replay   = リプレイ再生（物理停止・記録サンプルを補間して機体を動かす）
  *
  * 入力の選択（M1）: キャリブレーション済みのゲームパッド接続中はGamepadManager、
- * それ以外はKeyboardInput。ウィザード表示中は機体を動かさない。
- * `?input=debug` で入力デバッグ画面（生軸・正規化4軸）を重ねる。
- *
- * 開発用キー: 1/2/3=課目切替・Z=区画帯表示・M=GPS/ATTI切替・V=風切替・C=機体切替・R=リセット
- * （受験中はR=中止のみ有効）。Space/割当ボタン=安全確認の宣言。
- * 受験は左パネルの「課目開始」から（練習/試験通しモードの正式UIはM5）。
- * M3のHUD区画表示は常時判定の目視用で、受験の採点はExamSessionのフェーズゲーティングが正。
+ * それ以外はKeyboardInput。ウィザード表示中は機体を動かさない。`?input=debug` でデバッグ画面。
+ * キー: 1/2/3=課目・Z=区画帯・M=GPS/ATTI・V=風・C=機体・H=最小HUD・R=リセット（受験中=中止）。
+ * Space/割当ボタン=安全確認の宣言。受験中は R/H 以外の切替キーを無効化（practice中はZのみ許可）。
  */
 
 import * as THREE from 'three';
@@ -27,10 +30,11 @@ import {
   takeSnapshot,
   type ControlInput,
   type DroneSnapshot,
+  type FlightMode,
 } from './sim/FlightModel';
 import { FlightDynamics } from './sim/FlightDynamics';
 import { MACHINES } from './sim/MachineProfile';
-import { WindModel, type WindEvent } from './sim/WindModel';
+import { WindModel, type WindConfig, type WindEvent } from './sim/WindModel';
 import { WIND_PRESETS } from './sim/WindPresets';
 import { COURSES, courseToWorld, worldToCourse } from './exam/Course';
 import {
@@ -40,16 +44,35 @@ import {
   inHCircle,
   pylonCollisionIndex,
 } from './exam/geometry';
-import { ExamSession, type ExamEvent } from './exam/ExamSession';
+import { ExamSession, type ExamEvent, type ExamResult } from './exam/ExamSession';
+import { ExamSeries, type ExamSeriesResult } from './exam/ExamSeries';
+import { ScoreHistory } from './exam/ScoreHistory';
+import {
+  ReplayPlayer,
+  ReplayRecorder,
+  parseReplay,
+  serializeReplay,
+  type ReplayRecording,
+} from './replay/Replay';
 import { DroneModel } from './render/DroneModel';
-import { CourseMarkers } from './render/CourseMarkers';
-import { createBlobShadow, createGymScene, updateBlobShadow } from './render/Scene';
+import { CourseMarkers, computeCourseBBox } from './render/CourseMarkers';
+import { MiniMap } from './render/MiniMap';
+import {
+  createBlobShadow,
+  createGymScene,
+  createOutdoorScene,
+  updateBlobShadow,
+} from './render/Scene';
 import { ExamPanel } from './ui/ExamPanel';
+import { PracticePanel, type CameraMode, type SceneKind } from './ui/PracticePanel';
 import { InstructorVoice } from './ui/InstructorVoice';
 import { WarningBeep } from './ui/WarningBeep';
 
+type AppMode = 'free' | 'practice' | 'series' | 'replay';
+
 // --- DOM ---
 const app = document.getElementById('app')!;
+const hud = document.getElementById('hud')!;
 const hudCourse = document.getElementById('hud-course')!;
 const hudAlt = document.getElementById('hud-alt')!;
 const hudSpd = document.getElementById('hud-spd')!;
@@ -61,27 +84,32 @@ const hudInput = document.getElementById('hud-input')!;
 const hudZone = document.getElementById('hud-zone')!;
 const pauseOverlay = document.getElementById('pause-overlay')!;
 const resumeBtn = document.getElementById('resume-btn')!;
+// 左サイド列（受験パネル＋練習設定パネルを縦積み）
+const sideCol = document.createElement('div');
+sideCol.id = 'side-col';
+app.appendChild(sideCol);
 
-// --- レンダラ・シーン・カメラ（操縦者定点視点） ---
+// --- レンダラ・シーン（屋内/屋外の2種を起動時に生成し、参照を差し替える） ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 app.prepend(renderer.domElement);
 
-const scene = createGymScene();
+const gymScene = createGymScene();
+const outdoorScene = createOutdoorScene();
+let scene = gymScene;
 const blobShadow = createBlobShadow(scene);
 const droneModel = new DroneModel();
 scene.add(droneModel.group);
 
-const camera = new THREE.PerspectiveCamera(
-  55,
-  window.innerWidth / window.innerHeight,
-  0.05,
-  100,
-);
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.05, 100);
 // 視点位置は課目定義（Course.pilot）から setCourse() で設定する
 const lookTarget = new THREE.Vector3(0, 0.5, 0);
 const lookGoal = new THREE.Vector3();
+const chaseGoal = new THREE.Vector3();
+let cameraMode: CameraMode = 'pilot';
+/** 俯瞰カメラ用のコース中心（ワールド座標・setCourseで更新） */
+const courseCenterW = { x: 0, z: 0 };
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -89,12 +117,21 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+/** シーン切替: three.jsのadd()は付け替え（旧シーンから自動で外れる）を利用する */
+function setScene(kind: SceneKind): void {
+  scene = kind === 'gym' ? gymScene : outdoorScene;
+  scene.add(droneModel.group);
+  scene.add(blobShadow);
+  if (markers) scene.add(markers.group);
+}
+
 // --- シム（M2: 機体プロファイル・風はデータ駆動） ---
 let machineIndex = 0;
-let windPresetIndex = 0; // 既定=屋内（無風）
 // 風のシードはセッションごとに変える（テストと違い再現性は不要。決定性が要る検証はVitest側）
 const windSeedBase = Date.now() >>> 0;
-let wind = new WindModel(WIND_PRESETS[windPresetIndex].config, windSeedBase);
+let windSeedCounter = 0;
+let wind = new WindModel(WIND_PRESETS[0].config, windSeedBase);
+let windLabel = WIND_PRESETS[0].label;
 const drone = new FlightDynamics({
   profile: MACHINES[machineIndex],
   wind,
@@ -102,6 +139,37 @@ const drone = new FlightDynamics({
 });
 /** 風イベントの受け皿（毎ステップdrainし、受験中はExamSessionの突風猶予窓へ渡す） */
 const windEvents: WindEvent[] = [];
+
+function setWindPreset(index: number): void {
+  windSeedCounter++;
+  wind = new WindModel(WIND_PRESETS[index].config, windSeedBase + windSeedCounter);
+  windLabel = WIND_PRESETS[index].label;
+  drone.setWind(wind);
+}
+
+/** 風スライダー（カスタム風）: 定常+突風ピークを実施中止基準5m/s未満に収める */
+function setWindCustom(steadyMs: number, gusts: boolean): void {
+  const config: WindConfig = {
+    steadyMs,
+    steadyDirDeg: Math.random() * 360,
+    gust: {
+      enabled: gusts && steadyMs > 0,
+      ampMinMs: Math.min(0.4, steadyMs * 0.3),
+      ampMaxMs: Math.max(0.1, Math.min(1.4, 4.8 - steadyMs)),
+      intervalMinS: 4,
+      intervalMaxS: 10,
+      durMinS: 1.5,
+      durMaxS: 3.5,
+      tauS: 1.0,
+    },
+    turbulence: { ampMs: steadyMs * 0.13, freqHz: 0.7 },
+  };
+  windSeedCounter++;
+  wind = new WindModel(config, windSeedBase + windSeedCounter);
+  windLabel =
+    steadyMs === 0 ? 'カスタム（無風）' : `カスタム ${steadyMs.toFixed(1)}m/s${config.gust.enabled ? '+突風' : ''}`;
+  drone.setWind(wind);
+}
 
 const keyboard = new KeyboardInput();
 const gamepad = new GamepadManager(); // navigator.getGamepads / window / localStorage は既定注入
@@ -142,9 +210,9 @@ takeSnapshot(drone.state, currSnap);
 // --- M3: 課目（コース）状態 ---
 let courseIndex = 0;
 let markers: CourseMarkers | null = null;
-/** 巻き数アキュムレータ（4-2のみ・リセット/課目切替で作り直す） */
+/** 巻き数アキュムレータ（4-2のみ・HUD表示用。採点用はExamSessionが内部で持つ） */
 let winding: WindingTracker | null = null;
-let zonesVisible = true; // M3は開発表示として既定ON（試験モードの非表示制御はM5）
+let zonesVisible = true; // 練習モードの区画帯表示（試験モード通し中は強制非表示）
 // 幾何判定の使い回しバッファ（毎フレームのアロケーション回避）
 const courseXZ = { x: 0, z: 0 };
 const zoneScratch = createZoneResult();
@@ -156,9 +224,11 @@ function resetDrone(): void {
   takeSnapshot(drone.state, currSnap);
   const course = COURSES[courseIndex];
   winding = course.winding ? new WindingTracker(course.winding) : null;
+  // 機体テレポート時は軌跡をクリア（ジャンプ線を描かない）。minimapは初期化後のみ存在
+  minimap?.resetTrail();
 }
 
-/** 課目を切り替える: コース描画・操縦者視点・H起点スポーン・指定モードを設定 */
+/** 課目を切り替える: コース描画・操縦者視点・H起点スポーン・指定モード・ミニマップを設定 */
 function setCourse(index: number): void {
   courseIndex = index;
   const course = COURSES[index];
@@ -168,12 +238,17 @@ function setCourse(index: number): void {
     markers.dispose();
   }
   markers = new CourseMarkers(course);
-  markers.setZonesVisible(zonesVisible);
+  markers.setZonesVisible(zonesVisible && appMode !== 'series');
   scene.add(markers.group);
+  minimap.setCourse(course);
 
-  // 操縦者定点視点（課目ごとの立ち位置・目線1.6m）
+  // 操縦者定点視点（課目ごとの立ち位置・目線1.6m）と俯瞰用のコース中心
   courseToWorld(course.pilot.x, course.pilot.z, worldXZ);
   camera.position.set(worldXZ.x, course.pilot.eyeHeightM, worldXZ.z);
+  const bbox = computeCourseBBox(course.path, 0);
+  courseToWorld((bbox.minX + bbox.maxX) / 2, (bbox.minZ + bbox.maxZ) / 2, worldXZ);
+  courseCenterW.x = worldXZ.x;
+  courseCenterW.z = worldXZ.z;
 
   // H中心へスポーン（機首は前方=奥向き）・課目の指定モード（4-3=ATTI）
   courseToWorld(course.h.x, course.h.z, worldXZ);
@@ -183,10 +258,17 @@ function setCourse(index: number): void {
   lookTarget.set(worldXZ.x, 0.5, worldXZ.z);
 }
 
-// --- M4: 受験セッション ---
+// --- M4/M5: 受験（課目単体=practice／3課目通し=series）・リプレイ・履歴 ---
+let appMode: AppMode = 'free';
 let session: ExamSession | null = null;
+let series: ExamSeries | null = null;
+/** 通し試験の総合結果（課目別レポートの「総合成績を見る」から表示する） */
+let pendingSeries: ExamSeriesResult | null = null;
+/** 通し試験「不合格でも続行」設定（startSeries時にパネルから確定） */
+let seriesContinueOnFail = false;
 const voice = new InstructorVoice();
 const beep = new WarningBeep();
+const history = new ScoreHistory();
 const examEvents: ExamEvent[] = [];
 let declarePrev = false;
 // ExamSampleはdrone.stateの参照を使い回す（毎ステップのアロケーション回避。modeのみ毎回更新）
@@ -197,25 +279,35 @@ const examSample = {
   mode: drone.mode,
 };
 
-function examActive(): boolean {
-  return session !== null && !session.finished;
+// リプレイ（記録は課目単体受験のみ=練習モード機能。再生は保存/読込どちらのデータも可）
+let recorder: ReplayRecorder | null = null;
+let lastRecording: ReplayRecording | null = null;
+let loadedRecording: ReplayRecording | null = null;
+let player: ReplayPlayer | null = null;
+let playbackT = 0;
+const replayBuf = {
+  p: { x: 0, y: 0, z: 0 },
+  q: { x: 0, y: 0, z: 0, w: 1 },
+  mode: 'gps' as FlightMode,
+};
+const tmpQuat = new THREE.Quaternion();
+const tmpEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+function examBusy(): boolean {
+  return (session !== null && !session.finished) || (series !== null && !series.finished);
 }
 
-function startExam(): void {
-  if (examActive()) return;
+function unlockAudio(): void {
   // クリックハンドラ内でAudio/TTSをアンロック（Chromeの自動再生制限対策）
   beep.resume();
   voice.prime();
-  const course = COURSES[courseIndex];
-  drone.setMode(course.flightMode);
-  resetDrone();
-  markers?.setZonesVisible(false); // 受験中は区画帯非表示（実試験相当）
-  declarePrev = false;
-  session = new ExamSession({
-    course,
-    machineRadiusM: drone.profile.radiusM,
-    random: Math.random,
-    direction: 'random',
+}
+
+function wireSessionUiCallbacks(): {
+  onInstruction: (i: { text: string }) => void;
+  onWarning: (w: { message: string }) => void;
+} {
+  return {
     onInstruction: (i) => {
       examPanel.showInstruction(i.text);
       voice.speak(i.text);
@@ -224,49 +316,315 @@ function startExam(): void {
       beep.warning();
       examPanel.flashWarning(w.message);
     },
+  };
+}
+
+function addHistoryFromResult(r: ExamResult, kind: 'practice' | 'exam'): void {
+  history.add({
+    at: new Date().toISOString(),
+    kind,
+    courseId: r.courseId,
+    label: r.courseName,
+    machineId: MACHINES[machineIndex].id,
+    points: r.points,
+    passed: r.passed,
+    failCode: r.failCode,
+    endReason: r.endReason,
+    elapsedS: r.elapsedS,
+  });
+}
+
+// --- 課目単体の受験（練習モード: 区画帯は表示可・ミニマップあり・リプレイ記録） ---
+function startPractice(): void {
+  if (examBusy() || appMode === 'replay') return;
+  unlockAudio();
+  const course = COURSES[courseIndex];
+  drone.setMode(course.flightMode);
+  resetDrone();
+  declarePrev = false;
+  appMode = 'practice';
+  practicePanel.setEnabled(false);
+  recorder = new ReplayRecorder(MACHINES[machineIndex].id, course.id);
+  session = new ExamSession({
+    course,
+    machineRadiusM: drone.profile.radiusM,
+    random: Math.random,
+    direction: 'random',
+    ...wireSessionUiCallbacks(),
     onDeduction: (d) => {
       if (d.immediate) beep.fail();
       else beep.deduct();
       examPanel.addToast(d);
+      recorder?.addEvent(d);
       if (session) examPanel.setScore(session.points);
     },
     onFinished: (r) => {
       voice.cancel();
+      appMode = 'free';
       examPanel.setIdle();
       examPanel.setScore(r.points);
-      markers?.setZonesVisible(zonesVisible);
-      if (r.endReason !== 'aborted') examPanel.showReport(r, course);
+      practicePanel.setEnabled(true);
+      lastRecording = recorder?.finish() ?? null;
+      recorder = null;
+      practicePanel.setReplayAvailable(lastRecording !== null, hasPlayableRecording());
+      if (r.endReason !== 'aborted') {
+        addHistoryFromResult(r, 'practice');
+        practicePanel.setStatus(`リプレイ記録済み: ${r.courseName}（保存/再生できます）`);
+        examPanel.showReport(r, course);
+      }
     },
   });
   examPanel.setRunning(course.name);
   examPanel.setScore(session.points);
 }
 
-function abortExam(): void {
-  session?.abort();
+// --- 試験モード3課目通し（区画帯/ミニマップ非表示・カメラ定点固定・持ち点100共通） ---
+function startSeries(): void {
+  if (examBusy() || appMode === 'replay') return;
+  unlockAudio();
+  appMode = 'series';
+  declarePrev = false;
+  pendingSeries = null;
+  seriesContinueOnFail = examPanel.getContinueOnFail();
+  practicePanel.setEnabled(false);
+  minimap.setVisible(false);
+  series = new ExamSeries({
+    courses: COURSES,
+    machineRadiusM: drone.profile.radiusM,
+    random: Math.random,
+    direction: 'random',
+    continueOnFail: seriesContinueOnFail,
+    ...wireSessionUiCallbacks(),
+    onDeduction: (d) => {
+      if (d.immediate) beep.fail();
+      else beep.deduct();
+      examPanel.addToast(d);
+      if (series) examPanel.setScore(series.points);
+    },
+    onCourseFinished: (r, idx) => {
+      voice.cancel();
+      if (r.endReason === 'aborted') return; // 中止時はレポートを出さない
+      // 課目ごとに減点内訳＋上面図の軌跡レポートを出す（共通ルール「即不合格→内訳レポート」対応）
+      const hasNext = idx + 1 < COURSES.length;
+      const willContinue = hasNext && (r.endReason === 'completed' || seriesContinueOnFail);
+      if (willContinue) {
+        examPanel.showReport(r, COURSES[idx], {
+          primaryLabel: `次の課目（${COURSES[idx + 1].name}）へ`,
+          onPrimary: continueSeries,
+          closeLabel: '中断して閉じる',
+          onClose: abortExam,
+        });
+      } else {
+        // シリーズ終了（最終課目完走 or 不合格）: この課目の内訳を出し、総合成績へ誘導
+        examPanel.showReport(r, COURSES[idx], {
+          primaryLabel: '総合成績を見る',
+          onPrimary: () => {
+            if (pendingSeries) examPanel.showSeriesReport(pendingSeries, COURSES);
+          },
+        });
+      }
+    },
+    onSeriesFinished: (sr) => {
+      voice.cancel();
+      pendingSeries = sr;
+      finishSeriesUi(sr); // 履歴記録・後始末（総合レポートは課目レポートのボタンから開く）
+    },
+  });
+  setCourse(0); // 4-1から。H再配置・ATTI等はsetCourseが行う
+  markers?.setZonesVisible(false);
+  series.start();
+  examPanel.setRunning(`試験 ${COURSES[0].name}`);
+  examPanel.setScore(series.points);
 }
 
-const examPanel = new ExamPanel(app, { onStart: startExam, onAbort: abortExam });
+/** 課目間の「次の課目へ」: 機体を次課目のHへ再配置してから次セッションを開始（スコア持ち越し） */
+function continueSeries(): void {
+  if (!series || !series.awaitingNext) return;
+  examPanel.hideReport();
+  setCourse(series.courseIndex);
+  markers?.setZonesVisible(false);
+  declarePrev = false;
+  series.start();
+  examPanel.setRunning(`試験 ${series.course.name}`);
+  examPanel.setScore(series.points);
+}
+
+function finishSeriesUi(sr: ExamSeriesResult): void {
+  appMode = 'free';
+  examPanel.setIdle();
+  examPanel.setScore(sr.points);
+  practicePanel.setEnabled(true);
+  practicePanel.setReplayAvailable(lastRecording !== null, hasPlayableRecording());
+  markers?.setZonesVisible(zonesVisible);
+  minimap.setVisible(true);
+  const lastR = sr.results[sr.results.length - 1] ?? null;
+  // ユーザー中止の判定: 課目実行中の中止(aborted) or 課目間での中止(endedEarly かつ 最後が completed)
+  const userAborted =
+    lastR === null ||
+    lastR.endReason === 'aborted' ||
+    (sr.endedEarly && lastR.endReason === 'completed');
+  if (!userAborted && lastR !== null) {
+    history.add({
+      at: new Date().toISOString(),
+      kind: 'exam',
+      courseId: 'series',
+      label: '試験（3課目通し）',
+      machineId: MACHINES[machineIndex].id,
+      points: sr.points,
+      passed: sr.passed,
+      failCode: lastR.failCode,
+      endReason: sr.endedEarly ? lastR.endReason : 'completed',
+      elapsedS: sr.results.reduce((acc, r) => acc + r.elapsedS, 0),
+    });
+  }
+  series = null;
+}
+
+function abortExam(): void {
+  if (series && !series.finished) series.abort();
+  else session?.abort();
+}
+
+// --- リプレイ再生 ---
+function hasPlayableRecording(): boolean {
+  return loadedRecording !== null || lastRecording !== null;
+}
+
+function startReplay(): void {
+  if (examBusy() || appMode === 'replay') return;
+  const rec = loadedRecording ?? lastRecording;
+  if (!rec) return;
+  const idx = COURSES.findIndex((c) => c.id === rec.courseId);
+  if (idx < 0) {
+    practicePanel.setStatus(`再生不可: 未知の課目id「${rec.courseId}」`);
+    return;
+  }
+  setCourse(idx);
+  appMode = 'replay';
+  player = new ReplayPlayer(rec);
+  playbackT = 0;
+  practicePanel.setReplayPlaying(true);
+  const machineNote =
+    rec.machineId === MACHINES[machineIndex].id ? '' : `（記録機体: ${rec.machineId}）`;
+  practicePanel.setStatus(`リプレイ再生中: ${COURSES[idx].name}${machineNote}`);
+}
+
+function stopReplay(): void {
+  if (appMode !== 'replay') return;
+  appMode = 'free';
+  player = null;
+  practicePanel.setReplayPlaying(false);
+  practicePanel.setStatus('リプレイ再生を終了しました');
+  resetDrone();
+}
+
+function saveReplay(): void {
+  if (!lastRecording) return;
+  const blob = new Blob([serializeReplay(lastRecording)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `replay-${lastRecording.courseId}-${new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[:T]/g, '-')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadReplayFile(file: File): void {
+  file
+    .text()
+    .then((text) => {
+      loadedRecording = parseReplay(text);
+      practicePanel.setReplayAvailable(lastRecording !== null, true);
+      practicePanel.setStatus(
+        `リプレイ読込OK: 課目${loadedRecording.courseId}・機体${loadedRecording.machineId}・${loadedRecording.samples.length}サンプル`,
+      );
+    })
+    .catch((e: unknown) => {
+      practicePanel.setStatus(`リプレイ読込失敗: ${e instanceof Error ? e.message : String(e)}`);
+    });
+}
+
+// --- パネル生成 ---
+const examPanel = new ExamPanel(app, sideCol, {
+  onStartPractice: startPractice,
+  onStartSeries: startSeries,
+  onAbort: abortExam,
+  getHistory: () => history.list(),
+  onClearHistory: () => history.clear(),
+  onMinimalHud: (v) => setMinimalHud(v),
+});
+
+const practicePanel = new PracticePanel(sideCol, {
+  onMachine: (i) => {
+    machineIndex = i;
+    drone.setProfile(MACHINES[i]);
+  },
+  onWindPreset: setWindPreset,
+  onWindCustom: setWindCustom,
+  onScene: setScene,
+  onCamera: (mode) => {
+    cameraMode = mode;
+    if (mode === 'pilot') {
+      const course = COURSES[courseIndex];
+      courseToWorld(course.pilot.x, course.pilot.z, worldXZ);
+      camera.position.set(worldXZ.x, course.pilot.eyeHeightM, worldXZ.z);
+    }
+  },
+  onZones: (v) => {
+    zonesVisible = v;
+    markers?.setZonesVisible(v && appMode !== 'series');
+  },
+  onReplaySave: saveReplay,
+  onReplayLoad: loadReplayFile,
+  onReplayPlay: startReplay,
+  onReplayStop: stopReplay,
+});
+
+const minimap = new MiniMap(app);
+
+let minimalHud = false;
+function setMinimalHud(v: boolean): void {
+  minimalHud = v;
+  hud.classList.toggle('hud-minimal', v);
+  examPanel.setMinimalHudChecked(v);
+}
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') {
-    if (examActive()) abortExam();
+    if (appMode === 'replay') {
+      stopReplay();
+      return;
+    }
+    if (examBusy()) abortExam();
     resetDrone();
-  } else if (examActive()) {
-    // 受験中は開発用キーを無効化（モード・課目・機体・風は固定）
-    return;
+  } else if (e.code === 'KeyH') {
+    setMinimalHud(!minimalHud);
+  } else if (appMode === 'replay') {
+    return; // 再生中はR/H以外無効
+  } else if (examBusy()) {
+    // 受験中: 練習モード（課目単体）のみ区画帯トグルを許可（仕様: 区画表示は練習モードのみ表示可）
+    if (e.code === 'KeyZ' && series === null) {
+      zonesVisible = !zonesVisible;
+      markers?.setZonesVisible(zonesVisible);
+      practicePanel.setZonesChecked(zonesVisible);
+    }
   } else if (e.code === 'KeyM') {
     drone.setMode(drone.mode === 'gps' ? 'atti' : 'gps');
   } else if (e.code === 'KeyV') {
-    windPresetIndex = (windPresetIndex + 1) % WIND_PRESETS.length;
-    wind = new WindModel(WIND_PRESETS[windPresetIndex].config, windSeedBase + windPresetIndex);
-    drone.setWind(wind);
+    // 開発用: 風プリセットを順送り（パネルの選択表示とはズレることがある。正はパネル）
+    windSeedCounter++;
+    setWindPreset(windSeedCounter % WIND_PRESETS.length);
   } else if (e.code === 'KeyC') {
     machineIndex = (machineIndex + 1) % MACHINES.length;
     drone.setProfile(MACHINES[machineIndex]);
+    practicePanel.setMachineValue(machineIndex);
   } else if (e.code === 'KeyZ') {
     zonesVisible = !zonesVisible;
     markers?.setZonesVisible(zonesVisible);
+    practicePanel.setZonesChecked(zonesVisible);
   } else if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
     const index = Number(e.code.slice(-1)) - 1;
     if (index !== courseIndex) setCourse(index);
@@ -307,11 +665,35 @@ let lastZoneClass = '';
 
 const RAD2DEG = 180 / Math.PI;
 
-/** 区画HUDの文言を組み立てる（M3の目視確認用。フェーズによる判定ON/OFFはM4） */
+const WIND_ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+/** 風が吹いていく向きの矢印（画面基準: ↑=奥へ・→=右へ・↓=受験者側へ）。world→course（z反転）を考慮 */
+function windArrow(wx: number, wz: number): string {
+  const a = Math.atan2(wx, -wz); // 0=奥(-z)方向・+x側が正
+  const idx = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
+  return WIND_ARROWS[idx];
+}
+
+/** 進行中の受験セッション（practice or 試験通しの現課目）。HUDの経過/制限表示用 */
+function activeExamSession(): ExamSession | null {
+  if (series !== null && !series.finished) return series.session;
+  if (session !== null && !session.finished) return session;
+  return null;
+}
+
+/** 区画HUDの文言（常時判定の目視用。採点の正はExamSessionのフェーズゲーティング） */
 function buildZoneText(): { text: string; cls: string } {
+  // 試験モード通しは実試験どおり目測で飛ぶ体験にするため区画の生判定を伏せる（採点ヒントを出さない）
+  if (appMode === 'series') {
+    return { text: '（試験中は非表示）', cls: 'zone-free' };
+  }
+  if (appMode === 'replay' && player !== null) {
+    return {
+      text: `リプレイ再生中 ${playbackT.toFixed(1)}s / ${player.durationS.toFixed(1)}s`,
+      cls: 'zone-free',
+    };
+  }
   const course = COURSES[courseIndex];
-  const s = drone.state;
-  worldToCourse(s.p.x, s.p.z, courseXZ);
+  worldToCourse(currSnap.x, currSnap.z, courseXZ);
   evalZone(course.path, course.zoneBands, courseXZ.x, courseXZ.z, zoneScratch);
 
   let text: string;
@@ -327,7 +709,10 @@ function buildZoneText(): { text: string; cls: string } {
     cls = 'zone-fail';
   }
   if (inHCircle(courseXZ.x, courseXZ.z, course.h)) text += '｜H円内';
-  if (pylonCollisionIndex(courseXZ.x, courseXZ.z, s.p.y, drone.profile.radiusM, course.pylons) >= 0) {
+  if (
+    pylonCollisionIndex(courseXZ.x, courseXZ.z, currSnap.y, drone.profile.radiusM, course.pylons) >=
+    0
+  ) {
     text += '｜⚠パイロン接触';
     cls = 'zone-fail';
   }
@@ -351,6 +736,25 @@ const loop = new GameLoop({
     prevSnap.pitchRad = currSnap.pitchRad;
     prevSnap.rollRad = currSnap.rollRad;
     prevSnap.rotorSpin = currSnap.rotorSpin;
+
+    // --- リプレイ再生: 物理を止め、記録サンプルの補間で機体を動かす ---
+    if (appMode === 'replay' && player !== null) {
+      playbackT += dt;
+      player.sampleAt(player.startT + playbackT, replayBuf);
+      tmpQuat.set(replayBuf.q.x, replayBuf.q.y, replayBuf.q.z, replayBuf.q.w);
+      tmpEuler.setFromQuaternion(tmpQuat, 'YXZ');
+      currSnap.x = replayBuf.p.x;
+      currSnap.y = replayBuf.p.y;
+      currSnap.z = replayBuf.p.z;
+      // FlightDynamics.syncQuatの逆変換: rotation.y=yaw / rotation.x=-pitch / rotation.z=-roll
+      currSnap.yawRad = tmpEuler.y;
+      currSnap.pitchRad = -tmpEuler.x;
+      currSnap.rollRad = -tmpEuler.z;
+      currSnap.rotorSpin += 55 * dt;
+      if (playbackT > player.durationS + 0.8) stopReplay();
+      return;
+    }
+
     // rAF駆動のフレーム内ポーリング（gamepadconnectedイベントとの併用はGamepadManager側）
     gamepad.poll();
     if (inputSetup.wizardActive) {
@@ -373,9 +777,10 @@ const loop = new GameLoop({
       worldToCourse(drone.state.p.x, drone.state.p.z, courseXZ);
       winding.update(courseXZ.x, courseXZ.z);
     }
-    // --- M4: 受験セッションへサンプル＋イベント（宣言・突風）を毎ステップ供給 ---
+    // --- 受験（practice/series）へサンプル＋イベント（宣言・突風）を毎ステップ供給 ---
     const windCount = wind.drainEvents(windEvents);
-    if (session && !session.finished) {
+    const target = series ?? session;
+    if (target && !target.finished) {
       examEvents.length = 0;
       const declareNow = keyboard.declarePressed || gamepad.declarePressed;
       if (declareNow && !declarePrev) examEvents.push({ t: tSim, type: 'declare' });
@@ -384,8 +789,10 @@ const loop = new GameLoop({
         examEvents.push({ t: windEvents[i].t, type: windEvents[i].type });
       }
       examSample.mode = drone.mode;
-      session.step(tSim, examSample, examEvents);
+      target.step(tSim, examSample, examEvents);
     }
+    // リプレイ記録（課目単体受験のみ。recorderの生成/確定はstartPractice/onFinished）
+    recorder?.record(tSim, drone.state.p, drone.state.q, drone.mode);
     windEvents.length = 0;
   },
   render: (alpha) => {
@@ -400,10 +807,26 @@ const loop = new GameLoop({
     droneModel.update(x, y, z, yaw, pitch, roll, spin);
     updateBlobShadow(blobShadow, x, z, y);
 
-    // 操縦者定点から機体をなめらかに追尾
-    lookGoal.set(x, y + 0.1, z);
-    lookTarget.lerp(lookGoal, 0.18);
-    camera.lookAt(lookTarget);
+    // カメラ: 試験モード通しは操縦者定点固定。それ以外は選択（定点/俯瞰/追従）
+    if (appMode === 'series' || cameraMode === 'pilot') {
+      lookGoal.set(x, y + 0.1, z);
+      lookTarget.lerp(lookGoal, 0.18);
+      camera.lookAt(lookTarget);
+    } else if (cameraMode === 'overhead') {
+      camera.position.set(courseCenterW.x, 20, courseCenterW.z + 0.02);
+      lookGoal.set(courseCenterW.x, 0, courseCenterW.z);
+      camera.lookAt(lookGoal);
+    } else {
+      // 追従: 機首の後方4.2m・上方1.9mからなめらかに追う
+      chaseGoal.set(x + Math.sin(yaw) * 4.2, y + 1.9, z + Math.cos(yaw) * 4.2);
+      camera.position.lerp(chaseGoal, 0.1);
+      lookGoal.set(x, y + 0.3, z);
+      camera.lookAt(lookGoal);
+    }
+
+    // ミニマップ（コース座標へ変換。ヘディングは -ワールドyaw=コース方位）
+    worldToCourse(x, z, courseXZ);
+    minimap.update(courseXZ.x, courseXZ.z, -yaw);
 
     const altText = `${y.toFixed(1)} m`;
     if (altText !== lastAlt) {
@@ -421,7 +844,8 @@ const loop = new GameLoop({
       lastMode = modeText;
     }
     const windNow = Math.hypot(wind.current.x, wind.current.z);
-    const windText = `${WIND_PRESETS[windPresetIndex].label}｜今 ${windNow.toFixed(1)} m/s`;
+    const windDir = windNow > 0.1 ? `${windArrow(wind.current.x, wind.current.z)} ` : '';
+    const windText = `${windLabel}｜${windDir}${windNow.toFixed(1)} m/s`;
     if (windText !== lastWind) {
       hudWind.textContent = windText;
       lastWind = windText;
@@ -431,7 +855,20 @@ const loop = new GameLoop({
       hudMachine.textContent = machineText;
       lastMachine = machineText;
     }
-    const timeText = formatTime(loop.simTime);
+    // 時間: 受験中=経過/制限（起点は離陸指示の発話開始）・リプレイ中=再生位置・平常=シム時間
+    const activeS = activeExamSession();
+    let timeText: string;
+    if (appMode === 'replay' && player !== null) {
+      timeText = `再生 ${formatTime(playbackT)} / ${formatTime(player.durationS)}`;
+    } else if (activeS !== null) {
+      const e = activeS.examElapsedS;
+      timeText =
+        e === null
+          ? `--:-- / ${formatTime(activeS.timeLimitS)}`
+          : `${formatTime(e)} / ${formatTime(activeS.timeLimitS)}`;
+    } else {
+      timeText = formatTime(loop.simTime);
+    }
     if (timeText !== lastTime) {
       hudTime.textContent = timeText;
       lastTime = timeText;

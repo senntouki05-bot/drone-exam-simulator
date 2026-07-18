@@ -50,19 +50,145 @@ body {
   width: 3em;
 }
 
-/* --- M4: 受験UI（課目開始・字幕・警告・トースト・レポート） --- */
+/* --- M5: 左サイド列（受験パネル＋練習設定パネル） --- */
+
+#side-col {
+  position: absolute;
+  top: 300px;
+  left: 12px;
+  width: 302px;
+  max-height: calc(100vh - 316px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- 最小HUD（試験モード: 指示と時間のみ） --- */
+
+#hud.hud-minimal .hud-row:not(.hud-keep) {
+  display: none;
+}
+
+/* --- M4/M5: 受験UI（課目開始・字幕・警告・トースト・レポート・履歴） --- */
 
 #exam-panel {
-  position: absolute;
-  top: 296px;
-  left: 12px;
-  width: 300px;
   padding: 10px 14px;
   background: rgba(20, 20, 24, 0.72);
   color: #f2f2f2;
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.6;
+}
+
+#exam-panel #ep-history {
+  margin-top: 6px;
+}
+
+#exam-panel #ep-history summary {
+  cursor: pointer;
+  color: #9fb7d0;
+}
+
+#exam-panel .ep-history-row {
+  font-size: 12px;
+  color: #d5d5dc;
+  border-bottom: 1px solid #35353f;
+  padding: 2px 0;
+}
+
+#exam-panel .ep-history-empty {
+  font-size: 12px;
+  color: #8f8f98;
+  padding: 4px 0;
+}
+
+#exam-panel #ep-history-clear {
+  margin-top: 6px;
+  background: #43434d;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* --- M5: 練習設定パネル --- */
+
+#practice-panel {
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.72);
+  color: #f2f2f2;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+#practice-panel .pp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0;
+}
+
+#practice-panel .pp-label {
+  color: #9fb7d0;
+  width: 3.5em;
+  flex-shrink: 0;
+}
+
+#practice-panel select {
+  flex: 1;
+  min-width: 0;
+  background: #2a2a32;
+  color: #f2f2f2;
+  border: 1px solid #43434d;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+#practice-panel input[type='range'] {
+  flex: 1;
+  min-width: 60px;
+}
+
+#practice-panel .pp-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+#practice-panel button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
+#practice-panel button:disabled,
+#exam-panel button:disabled {
+  background: #43434d;
+  color: #8f8f98;
+  cursor: default;
+}
+
+#practice-panel .pp-status {
+  margin-top: 4px;
+  color: #8f8f98;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pp-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #b9b9c0;
+  font-size: 12px;
 }
 
 #exam-panel .ep-title {
@@ -243,12 +369,22 @@ body {
 
 .report-dialog button {
   padding: 8px 22px;
+  margin-right: 10px;
   font-size: 14px;
   border: none;
   border-radius: 8px;
   background: #3d7bd9;
   color: #fff;
   cursor: pointer;
+}
+
+.report-dialog #rp-continue {
+  background: #3d7bd9;
+}
+
+/* 「次の課目へ」がある課目間レポートでは、閉じる=中断を副ボタン色に落とす */
+.report-dialog #rp-continue ~ #rp-close {
+  background: #43434d;
 }
 
 /* --- M3: 区画HUDの色分け（自由帯=緑・減点=黄・不合格=赤） --- */
