@@ -5,11 +5,12 @@
  * ↑↓=エレベーター・←→=エルロン（右スティック相当）
  * Space=安全確認宣言（M4で使用。M0では押下記録のみ）
  *
- * M1でGamepad入力と共通のInputSourceインターフェースに統合する予定。
+ * Gamepad入力（GamepadManager）と共通のInputSourceを実装するフォールバック。
  * デジタル入力の平滑はsim側の1次遅れに任せ、ここでは-1/0/+1を返す。
  */
 
 import type { ControlInput } from '../sim/FlightModel';
+import type { InputSource } from './InputSource';
 
 const CONTROL_CODES = new Set([
   'KeyW',
@@ -23,7 +24,7 @@ const CONTROL_CODES = new Set([
   'Space',
 ]);
 
-export class KeyboardInput {
+export class KeyboardInput implements InputSource {
   private readonly pressed = new Set<string>();
   private readonly target: Window;
 
@@ -63,7 +64,7 @@ export class KeyboardInput {
     out.aileron = this.axis('ArrowRight', 'ArrowLeft');
   }
 
-  /** 安全確認宣言キー（Space）が押されているか（M4で使用） */
+  /** 安全確認宣言キー（Space）が押されているか */
   get declarePressed(): boolean {
     return this.pressed.has('Space');
   }

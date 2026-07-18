@@ -1,11 +1,18 @@
 /**
- * main.ts — M0の配線: GameLoop（固定240Hz＋描画補間）× キーボード入力 × 仮機体 × 体育館シーン。
+ * main.ts — 配線: GameLoop（固定240Hz＋描画補間）× 入力層（Gamepad/キーボード）× 仮機体 × 体育館シーン。
+ *
+ * 入力の選択（M1）: キャリブレーション済みのゲームパッド接続中はGamepadManager、
+ * それ以外はKeyboardInput。ウィザード表示中は機体を動かさない。
+ * `?input=debug` で入力デバッグ画面（生軸・正規化4軸）を重ねる。
  */
 
 import * as THREE from 'three';
 import './style.css';
 import { GameLoop } from './core/GameLoop';
 import { KeyboardInput } from './input/KeyboardInput';
+import { GamepadManager } from './input/GamepadManager';
+import { InputSetupUI } from './ui/InputSetupUI';
+import { InputDebugOverlay, type InputDebugView } from './ui/InputDebugOverlay';
 import { NEUTRAL_INPUT, type ControlInput } from './sim/FlightModel';
 import {
   SimpleDrone,
@@ -21,6 +28,7 @@ const app = document.getElementById('app')!;
 const hudAlt = document.getElementById('hud-alt')!;
 const hudSpd = document.getElementById('hud-spd')!;
 const hudTime = document.getElementById('hud-time')!;
+const hudInput = document.getElementById('hud-input')!;
 const pauseOverlay = document.getElementById('pause-overlay')!;
 const resumeBtn = document.getElementById('resume-btn')!;
 
@@ -54,7 +62,26 @@ window.addEventListener('resize', () => {
 // --- シム・入力 ---
 const drone = new SimpleDrone();
 const keyboard = new KeyboardInput();
+const gamepad = new GamepadManager(); // navigator.getGamepads / window / localStorage は既定注入
+const inputSetup = new InputSetupUI(app, gamepad);
+const debugOverlay =
+  new URLSearchParams(window.location.search).get('input') === 'debug'
+    ? new InputDebugOverlay(app)
+    : null;
 const controls: ControlInput = { ...NEUTRAL_INPUT };
+
+// デバッグ表示用ビュー（毎フレームのアロケーション回避のため使い回す）
+const debugView: InputDebugView = {
+  sourceName: '',
+  gamepadId: null,
+  calibrated: false,
+  mode: null,
+  deadzone: null,
+  rawAxes: [],
+  pressedButtons: [],
+  normalized: controls,
+  declare: false,
+};
 
 // 補間用スナップショット（前回ステップ／最新ステップ）
 const prevSnap: DroneSnapshot = { x: 0, y: 0, z: 0, yawRad: 0, rotorSpin: 0 };
@@ -96,6 +123,7 @@ function formatTime(tSim: number): string {
 let lastAlt = '';
 let lastSpd = '';
 let lastTime = '';
+let lastInput = '';
 
 // --- ゲームループ ---
 const loop = new GameLoop({
@@ -105,7 +133,19 @@ const loop = new GameLoop({
     prevSnap.z = currSnap.z;
     prevSnap.yawRad = currSnap.yawRad;
     prevSnap.rotorSpin = currSnap.rotorSpin;
-    keyboard.read(controls);
+    // rAF駆動のフレーム内ポーリング（gamepadconnectedイベントとの併用はGamepadManager側）
+    gamepad.poll();
+    if (inputSetup.wizardActive) {
+      // キャリブレーション中は機体を動かさない
+      controls.aileron = 0;
+      controls.elevator = 0;
+      controls.throttle = 0;
+      controls.rudder = 0;
+    } else if (gamepad.ready) {
+      gamepad.read(controls);
+    } else {
+      keyboard.read(controls);
+    }
     drone.step(dt, controls);
     takeSnapshot(drone.state, currSnap);
   },
@@ -138,6 +178,28 @@ const loop = new GameLoop({
     if (timeText !== lastTime) {
       hudTime.textContent = timeText;
       lastTime = timeText;
+    }
+
+    inputSetup.update();
+    const inputText = inputSetup.wizardActive
+      ? '設定中'
+      : gamepad.ready
+        ? 'プロポ/パッド'
+        : 'キーボード';
+    if (inputText !== lastInput) {
+      hudInput.textContent = inputText;
+      lastInput = inputText;
+    }
+    if (debugOverlay) {
+      debugView.sourceName = inputText;
+      debugView.gamepadId = gamepad.gamepadId;
+      debugView.calibrated = gamepad.calibration !== null;
+      debugView.mode = gamepad.calibration?.mode ?? null;
+      debugView.deadzone = gamepad.calibration?.deadzone ?? null;
+      debugView.rawAxes = gamepad.rawAxes;
+      debugView.pressedButtons = gamepad.rawButtons;
+      debugView.declare = keyboard.declarePressed || gamepad.declarePressed;
+      debugOverlay.update(debugView);
     }
 
     renderer.render(scene, camera);

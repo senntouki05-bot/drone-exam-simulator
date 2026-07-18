@@ -101,3 +101,257 @@ body {
 .pause-dialog button:hover {
   background: #4c8ae8;
 }
+
+/* --- M1: 入力機器パネル（接続画面） --- */
+
+#input-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.82);
+  color: #f2f2f2;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#input-panel .ip-title {
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+#input-panel .ip-guide {
+  margin: 8px 0 6px;
+  color: #ffd98a;
+}
+
+#input-panel .ip-trouble summary {
+  cursor: pointer;
+  color: #9fb7d0;
+}
+
+#input-panel .ip-trouble ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+#input-panel .ip-kb {
+  margin: 8px 0 0;
+  color: #b9b9c0;
+  font-size: 12px;
+}
+
+#input-panel .ip-id {
+  margin-top: 6px;
+  color: #9fd0a8;
+  word-break: break-all;
+  font-size: 12px;
+}
+
+#input-panel .ip-calib {
+  margin: 4px 0 8px;
+  color: #b9b9c0;
+}
+
+#input-panel button {
+  padding: 6px 12px;
+  margin: 2px 4px 2px 0;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
+#input-panel button:hover {
+  background: #4c8ae8;
+}
+
+#input-panel .ip-mode {
+  margin-top: 8px;
+  color: #b9b9c0;
+}
+
+#input-panel .ip-mode button {
+  background: #43434d;
+}
+
+#input-panel .ip-mode button.active {
+  background: #3d7bd9;
+}
+
+/* --- M1: キャリブレーションウィザード --- */
+
+#wizard-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+#wizard-overlay[hidden] {
+  display: none;
+}
+
+.wizard-dialog {
+  width: min(560px, calc(100vw - 40px));
+  background: #1e1e24;
+  color: #f2f2f2;
+  padding: 24px 30px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.wizard-title {
+  font-size: 13px;
+  color: #9fb7d0;
+  margin-bottom: 10px;
+}
+
+.wizard-prompt {
+  margin: 0 0 12px;
+  line-height: 1.7;
+}
+
+.wizard-hold {
+  height: 10px;
+  border-radius: 5px;
+  background: #35353f;
+  overflow: hidden;
+}
+
+.wizard-hold-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #58b368;
+  transition: width 0.05s linear;
+}
+
+.wizard-msg {
+  min-height: 1.4em;
+  margin: 10px 0;
+  color: #9fd0a8;
+  font-size: 13px;
+}
+
+.wizard-actions button {
+  padding: 8px 18px;
+  margin-right: 8px;
+  font-size: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
+.wizard-actions button:hover {
+  background: #4c8ae8;
+}
+
+.wizard-actions button.wizard-cancel {
+  background: #43434d;
+}
+
+.wizard-dz {
+  display: block;
+  margin-bottom: 10px;
+  color: #b9b9c0;
+  font-size: 13px;
+}
+
+.wizard-dz input[type='range'] {
+  vertical-align: middle;
+  width: 220px;
+  margin: 0 8px;
+}
+
+/* --- M1: 入力デバッグ画面（?input=debug） --- */
+
+#input-debug {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 360px;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.82);
+  color: #e8e8e8;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  user-select: none;
+  pointer-events: none;
+}
+
+#input-debug .dbg-title {
+  color: #9fb7d0;
+  margin-bottom: 4px;
+}
+
+#input-debug .dbg-info {
+  color: #b9b9c0;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+#input-debug .dbg-section {
+  margin: 6px 0 2px;
+  color: #ffd98a;
+}
+
+#input-debug .dbg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.6;
+}
+
+#input-debug .dbg-label {
+  width: 6.5em;
+  color: #9fb7d0;
+}
+
+#input-debug .dbg-bar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: #35353f;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#input-debug .dbg-bar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #6a6a75;
+}
+
+#input-debug .dbg-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #58b368;
+}
+
+#input-debug .dbg-value {
+  width: 4.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#input-debug .dbg-line {
+  margin-top: 4px;
+}
