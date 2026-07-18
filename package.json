@@ -1,0 +1,23 @@
+{
+  "name": "drone-exam-sim",
+  "private": true,
+  "version": "0.0.1",
+  "description": "二等無人航空機操縦士（回転翼マルチローター・基本）実地試験の実技シミュレータ",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "three": "^0.178.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.178.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}

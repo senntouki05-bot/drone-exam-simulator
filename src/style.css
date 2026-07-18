@@ -1,0 +1,103 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #35322c;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Noto Sans JP",
+    sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#app canvas {
+  display: block;
+}
+
+#hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.65);
+  color: #f2f2f2;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  user-select: none;
+  pointer-events: none;
+}
+
+.hud-title {
+  font-size: 12px;
+  color: #b9b9c0;
+  margin-bottom: 4px;
+}
+
+.hud-row {
+  display: flex;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-label {
+  color: #9fb7d0;
+  width: 3em;
+}
+
+#help {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: rgba(20, 20, 24, 0.65);
+  color: #e8e8e8;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+#pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#pause-overlay[hidden] {
+  display: none;
+}
+
+.pause-dialog {
+  background: #1e1e24;
+  color: #f2f2f2;
+  padding: 28px 36px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.pause-dialog button {
+  margin-top: 12px;
+  padding: 10px 28px;
+  font-size: 15px;
+  border: none;
+  border-radius: 8px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
+.pause-dialog button:hover {
+  background: #4c8ae8;
+}
