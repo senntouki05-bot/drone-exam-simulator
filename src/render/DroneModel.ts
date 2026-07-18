@@ -2,6 +2,8 @@
  * render/DroneModel.ts — プリミティブ組合せの仮クアッド機体（プロペラ回転つき）。
  *
  * ローカル座標: 脚底がy=0（sim側の位置pは脚底基準）。機首は-z方向（赤いノーズマーカー）。
+ * 姿勢は rotation.order='YXZ' で yaw→pitch→roll の順に適用（sim/FlightModel.tsの規約:
+ * rotation.y=yaw / rotation.x=-pitch(機首下げ正) / rotation.z=-roll(右バンク正)）。
  * ジオメトリ・マテリアルは生成時のみ作り、毎フレームのアロケーションはしない。
  */
 
@@ -15,6 +17,7 @@ export class DroneModel {
 
   constructor() {
     this.group = new THREE.Group();
+    this.group.rotation.order = 'YXZ';
 
     const bodyMat = new THREE.MeshLambertMaterial({ color: 0xe9e9ec });
     const darkMat = new THREE.MeshLambertMaterial({ color: 0x3a3a40 });
@@ -66,10 +69,20 @@ export class DroneModel {
     }
   }
 
-  /** 補間済みの位置・ヨー・プロペラ位相を反映する（毎描画フレーム） */
-  update(x: number, y: number, z: number, yawRad: number, rotorSpin: number): void {
+  /** 補間済みの位置・姿勢・プロペラ位相を反映する（毎描画フレーム） */
+  update(
+    x: number,
+    y: number,
+    z: number,
+    yawRad: number,
+    pitchRad: number,
+    rollRad: number,
+    rotorSpin: number,
+  ): void {
     this.group.position.set(x, y, z);
     this.group.rotation.y = yawRad;
+    this.group.rotation.x = -pitchRad; // 機首下げ正 → three.jsでは-x回転
+    this.group.rotation.z = -rollRad; // 右バンク正 → three.jsでは-z回転
     for (const prop of this.props) {
       prop.rotation.y = rotorSpin * (prop.userData.spinDir as number);
     }

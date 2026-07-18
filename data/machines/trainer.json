@@ -1,0 +1,16 @@
+{
+  "_note": "細則に明文なし・仮置き。実在機ではなく練習導入用の架空プロファイル（傾斜・速度・ヨーを絞って穏やかにした設計値）。maxSpeedMs / maxDescendMs は減点表SPEED（概ね5m/s以上で即不合格）を踏まえ5m/s未満に収める。各フィールドの意味は phantom4-like.json の _note と同じ。",
+  "name": "練習機（穏やか設定）",
+  "massKg": 1.2,
+  "radiusM": 0.25,
+  "maxTiltDeg": 15,
+  "tiltTimeConstS": 0.25,
+  "maxSpeedMs": 2.5,
+  "maxAscendMs": 1.5,
+  "maxDescendMs": 1.0,
+  "yawRateDps": 90,
+  "brakeDecelMs2": 2.5,
+  "hoverNoise": 0.015,
+  "dragCdA": 0.06,
+  "expo": 0.35
+}

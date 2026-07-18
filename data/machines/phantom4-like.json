@@ -1,0 +1,16 @@
+{
+  "_note": "細則に明文なし・仮置き。DJI Phantom 4のカタログ公表値（質量1380g・P/S/ATTIの最大傾斜25〜35°等）を出発点にした近似で、実機の制御パラメータは非公開のためチューニング前提（DESIGN.md 6節）。maxSpeedMs / maxDescendMs は減点表SPEED（概ね5m/s以上の対地速度で即不合格）を踏まえ5m/s未満に収める。hoverNoise=GPS位置ホールド中の目標点揺らぎ振幅[m]。dragCdA=Cd×A[m^2]（抗力 F=½ρ·CdA·|v_air|·v_air 用）。expo=スティックカーブ（0=リニア、1=x^3）。",
+  "name": "Phantom 4クラス（試験標準想定）",
+  "massKg": 1.38,
+  "radiusM": 0.25,
+  "maxTiltDeg": 30,
+  "tiltTimeConstS": 0.18,
+  "maxSpeedMs": 4.0,
+  "maxAscendMs": 2.5,
+  "maxDescendMs": 2.0,
+  "yawRateDps": 120,
+  "brakeDecelMs2": 3.5,
+  "hoverNoise": 0.02,
+  "dragCdA": 0.05,
+  "expo": 0.3
+}

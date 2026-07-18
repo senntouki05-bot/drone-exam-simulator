@@ -1,0 +1,16 @@
+{
+  "_note": "細則に明文なし・仮置き。ACSL SOTEN（蒼天）の公表値（質量約1.7kg・折りたたみ小型機）を出発点にした近似・チューニング前提。「風に敏感」を dragCdA/massKg 比を大きめに取ることで表現（phantom4-like比で約1.6倍）。maxSpeedMs / maxDescendMs は減点表SPEED（概ね5m/s以上で即不合格）を踏まえ5m/s未満に収める。各フィールドの意味は phantom4-like.json の _note と同じ。",
+  "name": "SOTENクラス（軽量・風に敏感）",
+  "massKg": 1.7,
+  "radiusM": 0.3,
+  "maxTiltDeg": 30,
+  "tiltTimeConstS": 0.15,
+  "maxSpeedMs": 4.0,
+  "maxAscendMs": 2.5,
+  "maxDescendMs": 2.0,
+  "yawRateDps": 150,
+  "brakeDecelMs2": 3.0,
+  "hoverNoise": 0.03,
+  "dragCdA": 0.1,
+  "expo": 0.25
+}

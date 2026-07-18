@@ -1,0 +1,56 @@
+{
+  "_note": "細則に明文なし・仮置き。二等は屋内実施が主流（風なし）・屋外は「5m/s以上の突風」で実施中止（実施基準3-8-3・DESIGN.md 2.4）のため、屋外プリセットは定常+突風ピークの合計が5m/s未満に収まるように設定。steadyDirDeg は「風が吹いていく方向」（0°=+x、90°=+z・ワールド座標）。gust: amp=突風ピーク風速の追加分[m/s]・interval=発生間隔[s]・dur=持続[s]・tauS=1次遅れ時定数[s]。turbulence: Perlin(値)ノイズ変調の振幅[m/s]と周波数[Hz]。",
+  "presets": [
+    {
+      "id": "indoor",
+      "label": "屋内（無風）",
+      "steadyMs": 0,
+      "steadyDirDeg": 0,
+      "gust": {
+        "enabled": false,
+        "ampMinMs": 0,
+        "ampMaxMs": 0,
+        "intervalMinS": 5,
+        "intervalMaxS": 10,
+        "durMinS": 1,
+        "durMaxS": 2,
+        "tauS": 1.0
+      },
+      "turbulence": { "ampMs": 0, "freqHz": 0.5 }
+    },
+    {
+      "id": "outdoor-breeze",
+      "label": "屋外・弱風2m/s",
+      "steadyMs": 2.0,
+      "steadyDirDeg": 25,
+      "gust": {
+        "enabled": true,
+        "ampMinMs": 0.6,
+        "ampMaxMs": 1.2,
+        "intervalMinS": 5,
+        "intervalMaxS": 12,
+        "durMinS": 1.5,
+        "durMaxS": 3.5,
+        "tauS": 1.0
+      },
+      "turbulence": { "ampMs": 0.25, "freqHz": 0.6 }
+    },
+    {
+      "id": "outdoor-strong",
+      "label": "屋外・強風3.5m/s+突風",
+      "steadyMs": 3.5,
+      "steadyDirDeg": 25,
+      "gust": {
+        "enabled": true,
+        "ampMinMs": 0.6,
+        "ampMaxMs": 1.4,
+        "intervalMinS": 4,
+        "intervalMaxS": 10,
+        "durMinS": 2,
+        "durMaxS": 4,
+        "tauS": 1.2
+      },
+      "turbulence": { "ampMs": 0.45, "freqHz": 0.7 }
+    }
+  ]
+}
