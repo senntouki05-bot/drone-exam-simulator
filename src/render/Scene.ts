@@ -1,9 +1,9 @@
 /**
  * render/Scene.ts — 体育館風の屋内シーン（M0）。
  *
- * 見た目だけのモジュール。コースマーカー（パイロン・H円・区画帯）の正式実装はM3で
- * data/courses/*.json 駆動の CourseMarkers として追加する。ここにあるH風の白円・
- * コートラインは装飾（採点とは無関係）。
+ * 見た目だけのモジュール。コース設置物（パイロン・H円・区画帯・ガイド線）は
+ * data/courses/*.json 駆動の CourseMarkers（M3）が担当し、ここにあるコートラインは
+ * 装飾（採点とは無関係）。操縦者の視点位置も課目定義（Course.pilot）から設定する。
  * 60fps優先のためシャドウマップは使わず、機体直下の擬似影（ブロブシャドウ）で代替する。
  */
 
@@ -15,9 +15,6 @@ export const GYM = {
   halfZ: 11,
   height: 8,
 } as const;
-
-/** 操縦者の目線位置（立ち位置はM3で課目ごとに設定。M0は仮に9m手前・目線1.6m） */
-export const PILOT_EYE = { x: 0, y: 1.6, z: 9 } as const;
 
 /** 木床のプランク模様をCanvasで生成（外部アセットなし・決定的パターン） */
 function createFloorTexture(): THREE.Texture {
@@ -86,7 +83,7 @@ export function createGymScene(): THREE.Scene {
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  // --- コートライン（装飾）＋ H風の白円（正式なH円はM3でコース定義から描く） ---
+  // --- コートライン（装飾。H円・経路白線はCourseMarkersが課目定義から描く） ---
   const lineMat = new THREE.MeshBasicMaterial({ color: 0xf5f2e8 });
   const courtW = 26;
   const courtD = 15;
@@ -95,10 +92,6 @@ export function createGymScene(): THREE.Scene {
   addLine(scene, lineMat, courtW, lw, 0, courtD / 2);
   addLine(scene, lineMat, lw, courtD, -courtW / 2, 0);
   addLine(scene, lineMat, lw, courtD, courtW / 2, 0);
-  const hRing = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.05, 48), lineMat);
-  hRing.rotation.x = -Math.PI / 2;
-  hRing.position.y = 0.006;
-  scene.add(hRing);
 
   // --- 壁（腰壁つき） ---
   const wallMat = new THREE.MeshLambertMaterial({ color: 0xded8c3 });

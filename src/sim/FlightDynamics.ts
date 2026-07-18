@@ -100,7 +100,7 @@ export class FlightDynamics implements FlightModel {
   private modeInternal: FlightMode;
 
   private readonly initP: Vec3;
-  private readonly initYaw: number;
+  private initYaw: number;
 
   // GPS水平サブ状態
   private gpsPhase: GpsPhase = 'hold';
@@ -169,6 +169,17 @@ export class FlightDynamics implements FlightModel {
 
   setWind(wind: WindSource | null): void {
     this.wind = wind;
+  }
+
+  /**
+   * リセット時の初期位置（スポーン地点）を変更する（M3: 課目のH中心・地面）。
+   * 呼び出し後に reset() するのは呼び出し側の責任（描画補間のスナップショット同期のため）。
+   */
+  setSpawn(x: number, z: number, yawRad = 0): void {
+    this.initP.x = x;
+    this.initP.y = 0;
+    this.initP.z = z;
+    this.initYaw = yawRad;
   }
 
   reset(): void {

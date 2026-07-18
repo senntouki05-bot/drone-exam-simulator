@@ -1,13 +1,15 @@
 /**
  * main.ts — 配線: GameLoop（固定240Hz＋描画補間）× 入力層（Gamepad/キーボード）
- * × M2飛行力学（FlightDynamics: カスケード制御・GPS/ATTI・風・機体プロファイル）× 体育館シーン。
+ * × M2飛行力学（FlightDynamics: カスケード制御・GPS/ATTI・風・機体プロファイル）
+ * × M3コース（data/courses/*.json: 描画・操縦者視点・幾何判定の目視用HUD）。
  *
  * 入力の選択（M1）: キャリブレーション済みのゲームパッド接続中はGamepadManager、
  * それ以外はKeyboardInput。ウィザード表示中は機体を動かさない。
  * `?input=debug` で入力デバッグ画面（生軸・正規化4軸）を重ねる。
  *
- * M2の開発用キー: M=GPS/ATTI切替・V=風プリセット切替・C=機体切替・R=リセット。
- * （練習モードの正式UI＝風スライダー・機体選択はM5。ここは動作確認用の最小導線）
+ * 開発用キー: 1/2/3=課目切替・Z=区画帯表示・M=GPS/ATTI切替・V=風切替・C=機体切替・R=リセット。
+ * （練習/試験モードの正式UIはM5。ここは動作確認用の最小導線）
+ * M3のHUD区画表示は目視確認用: フェーズゲーティング（判定のON/OFF）と減点への変換はM4。
  */
 
 import * as THREE from 'three';
@@ -28,11 +30,21 @@ import { FlightDynamics } from './sim/FlightDynamics';
 import { MACHINES } from './sim/MachineProfile';
 import { WindModel, type WindEvent } from './sim/WindModel';
 import { WIND_PRESETS } from './sim/WindPresets';
+import { COURSES, courseToWorld, worldToCourse } from './exam/Course';
+import {
+  WindingTracker,
+  createZoneResult,
+  evalZone,
+  inHCircle,
+  pylonCollisionIndex,
+} from './exam/geometry';
 import { DroneModel } from './render/DroneModel';
-import { PILOT_EYE, createBlobShadow, createGymScene, updateBlobShadow } from './render/Scene';
+import { CourseMarkers } from './render/CourseMarkers';
+import { createBlobShadow, createGymScene, updateBlobShadow } from './render/Scene';
 
 // --- DOM ---
 const app = document.getElementById('app')!;
+const hudCourse = document.getElementById('hud-course')!;
 const hudAlt = document.getElementById('hud-alt')!;
 const hudSpd = document.getElementById('hud-spd')!;
 const hudMode = document.getElementById('hud-mode')!;
@@ -40,6 +52,7 @@ const hudWind = document.getElementById('hud-wind')!;
 const hudMachine = document.getElementById('hud-machine')!;
 const hudTime = document.getElementById('hud-time')!;
 const hudInput = document.getElementById('hud-input')!;
+const hudZone = document.getElementById('hud-zone')!;
 const pauseOverlay = document.getElementById('pause-overlay')!;
 const resumeBtn = document.getElementById('resume-btn')!;
 
@@ -60,7 +73,7 @@ const camera = new THREE.PerspectiveCamera(
   0.05,
   100,
 );
-camera.position.set(PILOT_EYE.x, PILOT_EYE.y, PILOT_EYE.z);
+// 視点位置は課目定義（Course.pilot）から setCourse() で設定する
 const lookTarget = new THREE.Vector3(0, 0.5, 0);
 const lookGoal = new THREE.Vector3();
 
@@ -120,10 +133,48 @@ const currSnap: DroneSnapshot = { ...prevSnap };
 takeSnapshot(drone.state, prevSnap);
 takeSnapshot(drone.state, currSnap);
 
+// --- M3: 課目（コース）状態 ---
+let courseIndex = 0;
+let markers: CourseMarkers | null = null;
+/** 巻き数アキュムレータ（4-2のみ・リセット/課目切替で作り直す） */
+let winding: WindingTracker | null = null;
+let zonesVisible = true; // M3は開発表示として既定ON（試験モードの非表示制御はM5）
+// 幾何判定の使い回しバッファ（毎フレームのアロケーション回避）
+const courseXZ = { x: 0, z: 0 };
+const zoneScratch = createZoneResult();
+const worldXZ = { x: 0, z: 0 };
+
 function resetDrone(): void {
   drone.reset();
   takeSnapshot(drone.state, prevSnap); // テレポートを補間しない
   takeSnapshot(drone.state, currSnap);
+  const course = COURSES[courseIndex];
+  winding = course.winding ? new WindingTracker(course.winding) : null;
+}
+
+/** 課目を切り替える: コース描画・操縦者視点・H起点スポーン・指定モードを設定 */
+function setCourse(index: number): void {
+  courseIndex = index;
+  const course = COURSES[index];
+
+  if (markers) {
+    scene.remove(markers.group);
+    markers.dispose();
+  }
+  markers = new CourseMarkers(course);
+  markers.setZonesVisible(zonesVisible);
+  scene.add(markers.group);
+
+  // 操縦者定点視点（課目ごとの立ち位置・目線1.6m）
+  courseToWorld(course.pilot.x, course.pilot.z, worldXZ);
+  camera.position.set(worldXZ.x, course.pilot.eyeHeightM, worldXZ.z);
+
+  // H中心へスポーン（機首は前方=奥向き）・課目の指定モード（4-3=ATTI）
+  courseToWorld(course.h.x, course.h.z, worldXZ);
+  drone.setSpawn(worldXZ.x, worldXZ.z, 0);
+  drone.setMode(course.flightMode);
+  resetDrone();
+  lookTarget.set(worldXZ.x, 0.5, worldXZ.z);
 }
 
 window.addEventListener('keydown', (e) => {
@@ -138,6 +189,12 @@ window.addEventListener('keydown', (e) => {
   } else if (e.code === 'KeyC') {
     machineIndex = (machineIndex + 1) % MACHINES.length;
     drone.setProfile(MACHINES[machineIndex]);
+  } else if (e.code === 'KeyZ') {
+    zonesVisible = !zonesVisible;
+    markers?.setZonesVisible(zonesVisible);
+  } else if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') {
+    const index = Number(e.code.slice(-1)) - 1;
+    if (index !== courseIndex) setCourse(index);
   }
 });
 
@@ -162,6 +219,7 @@ function formatTime(tSim: number): string {
 }
 
 // HUDはテキストが変わったときだけDOMを触る
+let lastCourse = '';
 let lastAlt = '';
 let lastSpd = '';
 let lastMode = '';
@@ -169,6 +227,44 @@ let lastWind = '';
 let lastMachine = '';
 let lastTime = '';
 let lastInput = '';
+let lastZone = '';
+let lastZoneClass = '';
+
+const RAD2DEG = 180 / Math.PI;
+
+/** 区画HUDの文言を組み立てる（M3の目視確認用。フェーズによる判定ON/OFFはM4） */
+function buildZoneText(): { text: string; cls: string } {
+  const course = COURSES[courseIndex];
+  const s = drone.state;
+  worldToCourse(s.p.x, s.p.z, courseXZ);
+  evalZone(course.path, course.zoneBands, courseXZ.x, courseXZ.z, zoneScratch);
+
+  let text: string;
+  let cls: string;
+  if (zoneScratch.zone === 'free') {
+    text = `自由帯 ${zoneScratch.distM.toFixed(1)}m（${zoneScratch.legId}）`;
+    cls = 'zone-free';
+  } else if (zoneScratch.zone === 'deduct') {
+    text = `減点区画（${zoneScratch.zoneId === 'outer' ? '外側' : '内側'}）${zoneScratch.distM.toFixed(1)}m`;
+    cls = 'zone-deduct';
+  } else {
+    text = `不合格区画 ${zoneScratch.distM.toFixed(1)}m`;
+    cls = 'zone-fail';
+  }
+  if (inHCircle(courseXZ.x, courseXZ.z, course.h)) text += '｜H円内';
+  if (pylonCollisionIndex(courseXZ.x, courseXZ.z, s.p.y, drone.profile.radiusM, course.pylons) >= 0) {
+    text += '｜⚠パイロン接触';
+    cls = 'zone-fail';
+  }
+  if (winding) {
+    const active = winding.activeCircleId;
+    if (active !== null) {
+      const deg = Math.round(winding.accumRad * RAD2DEG);
+      text += `｜周回:${active === 'left' ? '左' : '右'} ${deg >= 0 ? '+' : ''}${deg}°`;
+    }
+  }
+  return { text, cls };
+}
 
 // --- ゲームループ ---
 const loop = new GameLoop({
@@ -197,6 +293,11 @@ const loop = new GameLoop({
     wind.update(dt, tSim);
     drone.step(dt, controls);
     takeSnapshot(drone.state, currSnap);
+    // 巻き数は物理レートで毎サンプル追跡（4-2のみ。セグメント確定の解釈はM4）
+    if (winding) {
+      worldToCourse(drone.state.p.x, drone.state.p.z, courseXZ);
+      winding.update(courseXZ.x, courseXZ.z);
+    }
   },
   render: (alpha) => {
     const x = lerp(prevSnap.x, currSnap.x, alpha);
@@ -249,6 +350,20 @@ const loop = new GameLoop({
       hudTime.textContent = timeText;
       lastTime = timeText;
     }
+    const courseText = COURSES[courseIndex].name;
+    if (courseText !== lastCourse) {
+      hudCourse.textContent = courseText;
+      lastCourse = courseText;
+    }
+    const zoneInfo = buildZoneText();
+    if (zoneInfo.text !== lastZone) {
+      hudZone.textContent = zoneInfo.text;
+      lastZone = zoneInfo.text;
+    }
+    if (zoneInfo.cls !== lastZoneClass) {
+      hudZone.className = zoneInfo.cls;
+      lastZoneClass = zoneInfo.cls;
+    }
 
     inputSetup.update();
     const inputText = inputSetup.wizardActive
@@ -284,4 +399,5 @@ resumeBtn.addEventListener('click', () => {
   loop.resume();
 });
 
+setCourse(0); // 起動時は4-1 スクエア飛行
 loop.start();

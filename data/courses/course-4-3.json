@@ -1,0 +1,83 @@
+{
+  "_note": "寸法・手順の出典: 国交省航空局 実地試験実施細則（令和7年12月5日改正）。直線E(-6.5,0)–A(0,0)–B(6.5,0)。区画は直線の両側1.5〜2.5m=減点・2.5m超=不合格（境界矩形18m×5m・矩形バンド距離で判定）。Hは受験者と反対側の奥(0,2.5)=不合格境界上にあるが、正しい進入はH円進入でフェーズが切り替わるため不合格判定に当たらない（フェーズゲーティングはM4）",
+  "name": "4-3 異常事態における飛行",
+  "flightMode": "atti",
+  "altitudeM": 3.5,
+  "timeLimitS": 360,
+  "pilot": { "x": 0, "z": -8.5, "eyeHeightM": 1.6 },
+  "h": { "x": 0, "z": 2.5 },
+  "zoneBands": { "freeM": 1.5, "deductM": 2.5 },
+  "path": {
+    "kind": "corridor",
+    "from": { "id": "E", "x": -6.5, "z": 0 },
+    "to": { "id": "B", "x": 6.5, "z": 0 }
+  },
+  "pylons": {
+    "_note": "細則の4-3コース図にパイロン設置の明文なし・仮置きで設置なし（E/A/Bは地上マーカーで表示）。衝突対象を勝手に増やさない",
+    "heightM": 0.7,
+    "radiusM": 0.2,
+    "positions": []
+  },
+  "groundMarkers": [
+    { "id": "E", "x": -6.5, "z": 0 },
+    { "id": "A", "x": 0, "z": 0 },
+    { "id": "B", "x": 6.5, "z": 0 }
+  ],
+  "instructions": [
+    {
+      "id": "intro",
+      "text": "課目4-3、異常事態における飛行。位置安定機能はOFFです。",
+      "trigger": { "type": "session_start" }
+    },
+    {
+      "id": "takeoff",
+      "text": "安全確認の上、離陸してください。",
+      "trigger": { "type": "after_instruction", "ref": "intro" }
+    },
+    {
+      "id": "climb",
+      "text": "高度3.5メートルまで上昇してください。",
+      "trigger": { "type": "takeoff_detected" }
+    },
+    {
+      "id": "hover",
+      "text": "その場で5秒間ホバリングしてください。",
+      "trigger": { "type": "at_target_altitude" }
+    },
+    {
+      "id": "to_A",
+      "text": "Aへ移動してください。",
+      "trigger": { "type": "hover_done" }
+    },
+    {
+      "id": "shuttle",
+      "text": "機首の方向を維持したまま、{direction}へ側方移動し、EとBの間を往復してください。",
+      "trigger": { "type": "leg_reached", "point": "A" }
+    },
+    {
+      "id": "emergency",
+      "text": "緊急事態発生。その場でホバリングしてください。",
+      "trigger": { "type": "emergency_declared" }
+    },
+    {
+      "id": "emergency_land",
+      "text": "緊急着陸してください。高度を維持したまま、最短経路でHの上空へ移動してください。",
+      "trigger": { "type": "emergency_hover_done" }
+    },
+    {
+      "id": "land",
+      "text": "安全確認の上、着陸してください。",
+      "trigger": { "type": "h_entered" }
+    },
+    {
+      "id": "motor_stop",
+      "text": "モーターを停止してください。",
+      "trigger": { "type": "touchdown" }
+    },
+    {
+      "id": "end",
+      "text": "課目4-3を終了します。",
+      "trigger": { "type": "motor_stopped" }
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "_note": "寸法・手順の出典: 国交省航空局 実地試験実施細則（令和7年12月5日改正）。座標系=原点A・x右・z奥（受験者から見て）。パイロン寸法・指示トリガの閾値など細則に明文がない値は各所の_note参照（仮置き・設定可能）",
+  "name": "4-1 スクエア飛行",
+  "flightMode": "gps",
+  "altitudeM": 3.5,
+  "timeLimitS": 480,
+  "pilot": { "x": 0, "z": -8.5, "eyeHeightM": 1.6 },
+  "h": { "x": 0, "z": 2.5 },
+  "zoneBands": { "freeM": 1.5, "deductM": 2.5 },
+  "path": {
+    "kind": "polygon",
+    "points": [
+      { "id": "A", "x": 0, "z": 0 },
+      { "id": "B", "x": 6.5, "z": 0 },
+      { "id": "C", "x": 6.5, "z": 5 },
+      { "id": "D", "x": -6.5, "z": 5 },
+      { "id": "E", "x": -6.5, "z": 0 }
+    ]
+  },
+  "pylons": {
+    "_note": "カラーコーン相当。高さ・半径は細則に明文なし・仮置き",
+    "heightM": 0.7,
+    "radiusM": 0.2,
+    "positions": [
+      { "x": 0, "z": 0 },
+      { "x": 6.5, "z": 0 },
+      { "x": 6.5, "z": 5 },
+      { "x": -6.5, "z": 5 },
+      { "x": -6.5, "z": 0 }
+    ]
+  },
+  "groundMarkers": [],
+  "instructions": [
+    {
+      "id": "intro",
+      "text": "課目4-1、スクエア飛行。位置安定機能はONです。",
+      "trigger": { "type": "session_start" }
+    },
+    {
+      "id": "takeoff",
+      "text": "安全確認の上、離陸してください。",
+      "trigger": { "type": "after_instruction", "ref": "intro" }
+    },
+    {
+      "id": "climb",
+      "text": "高度3.5メートルまで上昇してください。",
+      "trigger": { "type": "takeoff_detected" }
+    },
+    {
+      "id": "hover",
+      "text": "その場で5秒間ホバリングしてください。",
+      "trigger": { "type": "at_target_altitude" }
+    },
+    {
+      "id": "to_A",
+      "text": "Aへ移動してください。",
+      "trigger": { "type": "hover_done" }
+    },
+    {
+      "id": "lap",
+      "text": "機首を進行方向に向けて、{direction}に、{lapOrder}の順で飛行してください。",
+      "trigger": { "type": "leg_reached", "point": "A" }
+    },
+    {
+      "id": "return_h",
+      "text": "Hの上空へ移動してください。",
+      "trigger": { "type": "lap_done" }
+    },
+    {
+      "id": "land",
+      "text": "安全確認の上、着陸してください。",
+      "trigger": { "type": "h_entered" }
+    },
+    {
+      "id": "motor_stop",
+      "text": "モーターを停止してください。",
+      "trigger": { "type": "touchdown" }
+    },
+    {
+      "id": "end",
+      "text": "課目4-1を終了します。",
+      "trigger": { "type": "motor_stopped" }
+    }
+  ]
+}

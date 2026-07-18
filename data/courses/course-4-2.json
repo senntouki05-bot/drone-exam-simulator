@@ -1,0 +1,81 @@
+{
+  "_note": "寸法・手順の出典: 国交省航空局 実地試験実施細則（令和7年12月5日改正）。直径5mの円2つが原点（H）で接する。座標系=x右・z奥（受験者から見て）。内側の減点区画=各円中心の半径1m円は、幾何的に「円周から1.5m超の内側」と同値のため経路距離バンドで判定する",
+  "name": "4-2 8の字飛行",
+  "flightMode": "gps",
+  "altitudeM": 1.5,
+  "timeLimitS": 480,
+  "pilot": { "x": 0, "z": -9, "eyeHeightM": 1.6 },
+  "h": { "x": 0, "z": 0 },
+  "zoneBands": { "freeM": 1.5, "deductM": 2.5 },
+  "path": {
+    "kind": "circles",
+    "circles": [
+      { "id": "left", "center": { "x": -2.5, "z": 0 }, "radiusM": 2.5 },
+      { "id": "right", "center": { "x": 2.5, "z": 0 }, "radiusM": 2.5 }
+    ]
+  },
+  "pylons": {
+    "_note": "各円中心にパイロン1本。高さ・半径は細則に明文なし・仮置き",
+    "heightM": 0.7,
+    "radiusM": 0.2,
+    "positions": [
+      { "x": -2.5, "z": 0 },
+      { "x": 2.5, "z": 0 }
+    ]
+  },
+  "groundMarkers": [],
+  "winding": {
+    "_note": "巻き数判定の実装パラメータ（細則に明文なし・仮置き）。minSampleRadiusM=中心近傍の角度更新スキップ半径・switchHysteresisM=アクティブ円切替のH離隔・fullTurnToleranceRad=±2π到達判定の許容（切替がH近傍で起こるため）",
+    "minSampleRadiusM": 0.3,
+    "switchHysteresisM": 0.5,
+    "fullTurnToleranceRad": 0.35,
+    "laps": 2
+  },
+  "instructions": [
+    {
+      "id": "intro",
+      "text": "課目4-2、8の字飛行。位置安定機能はONです。",
+      "trigger": { "type": "session_start" }
+    },
+    {
+      "id": "takeoff",
+      "text": "安全確認の上、離陸してください。",
+      "trigger": { "type": "after_instruction", "ref": "intro" }
+    },
+    {
+      "id": "climb",
+      "text": "高度1.5メートルまで上昇してください。",
+      "trigger": { "type": "takeoff_detected" }
+    },
+    {
+      "id": "hover",
+      "text": "その場で5秒間ホバリングしてください。",
+      "trigger": { "type": "at_target_altitude" }
+    },
+    {
+      "id": "figure8",
+      "text": "機首を進行方向に向けて、{direction}から、8の字飛行を連続2周行ってください。",
+      "trigger": { "type": "hover_done" }
+    },
+    {
+      "id": "return_h",
+      "text": "Hの上空へ移動してください。",
+      "trigger": { "type": "lap_done" }
+    },
+    {
+      "id": "land",
+      "text": "安全確認の上、着陸してください。",
+      "trigger": { "type": "h_entered" }
+    },
+    {
+      "id": "motor_stop",
+      "text": "モーターを停止してください。",
+      "trigger": { "type": "touchdown" }
+    },
+    {
+      "id": "end",
+      "text": "課目4-2を終了します。",
+      "trigger": { "type": "motor_stopped" }
+    }
+  ]
+}

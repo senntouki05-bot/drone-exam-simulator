@@ -50,6 +50,20 @@ body {
   width: 3em;
 }
 
+/* --- M3: 区画HUDの色分け（自由帯=緑・減点=黄・不合格=赤） --- */
+
+#hud-zone.zone-free {
+  color: #8fd39a;
+}
+
+#hud-zone.zone-deduct {
+  color: #ffd160;
+}
+
+#hud-zone.zone-fail {
+  color: #ff7a7a;
+}
+
 #help {
   position: absolute;
   bottom: 12px;
