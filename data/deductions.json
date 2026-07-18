@@ -1,0 +1,51 @@
+{
+  "_note": "減点表と自動判定の閾値（正本=実地試験実施細則の減点表・CLAUDE-CODE-PROMPT.md「減点表」節）。点数・区画バンド・持ち点は細則明文。thresholds/fsm の各値は細則に明文なしの仮置き（要調整）で、_note_thresholds に個別の根拠を記す",
+  "pass": { "startPoints": 100, "passPoints": 70 },
+  "points": {
+    "ZONE_DEV": 5,
+    "WRONG_OP": 5,
+    "LAND_BAD": 5,
+    "SAFETY": 5,
+    "WOBBLE": 1,
+    "ROUGH": 1,
+    "HEADING": 1
+  },
+  "immediate": ["CRASH", "SPEED", "ZONE_FAIL", "CENTER_MISS", "TIMEOUT"],
+  "thresholds": {
+    "_note_thresholds": "dangerSpeedMs=細則「概ね5m/s以上」。連続時間・傾斜・ふらつき系は明文なし・仮置き",
+    "dangerSpeedMs": 5.0,
+    "dangerSpeedHoldS": 0.5,
+    "crashDescentMs": 2.0,
+    "crashTiltDeg": 45,
+    "landBadDescentMs": 1.0,
+    "zoneDevRecoveryS": 2.0,
+    "headingErrDeg": 30,
+    "headingHoldS": 1.0,
+    "headingGraceS": 3.0,
+    "wrongOpAltErrM": 1.0,
+    "wrongOpAltHoldS": 3.0,
+    "wrongOpHeadingHoldS": 6.0,
+    "sameCodeRateLimitS": 3.0,
+    "gustGraceS": 2.0,
+    "wobbleLatSpeedMs": 1.2,
+    "wobbleFlipCount": 4,
+    "wobbleWindowS": 2.5,
+    "wobbleLandSlideMs": 0.5,
+    "_note_rough": "roughAccelMs2はM4のE2E実測で4.0→6.0に引き上げ: 垂直制御の加速度上限(4.0m/s²)+水平ブレーキ(最大3.5m/s²)の通常操作が誤検出されたため。フルスティックの乱暴な操作(6m/s²超)のみ拾う。要現地調整",
+    "roughAccelMs2": 6.0,
+    "roughHoldS": 0.2
+  },
+  "fsm": {
+    "_note_fsm": "FSM既定値（細則に明文なし・仮置き）。takeoffAltM/touchdownAltM=離陸/接地検出、legReachM=レグ到達、hover=5秒ホバ完了条件、emergencyDelayRangeS=1往復完了後の緊急事態宣言の一様乱数範囲、motorStopHoldS=接地継続で「モーター停止」とみなす秒数（公開APIにスロットルが無いため接地継続で近似）、speechCharsPerS=指示の名目発話時間（発話開始起点の決定的スケジューリング用・TTS完了は待たない）",
+    "takeoffAltM": 0.1,
+    "touchdownAltM": 0.02,
+    "legReachM": 1.0,
+    "hover": { "radiusM": 0.5, "altTolM": 0.3, "speedMs": 0.3, "holdS": 5.0 },
+    "emergencyHover": { "speedMs": 0.3, "holdS": 2.0 },
+    "emergencyDelayRangeS": [5, 20],
+    "motorStopHoldS": 2.0,
+    "descentStartMs": 0.3,
+    "speechCharsPerS": 8,
+    "speechMinS": 1.0
+  }
+}

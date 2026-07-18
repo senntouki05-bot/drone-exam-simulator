@@ -2,7 +2,7 @@
 
 二等無人航空機操縦士（回転翼マルチローター・基本）実地試験の**実技シミュレータ**。実物のプロポをUSB接続してブラウザで練習する。
 
-- 状態: **M3完了**（M0雛形＋M1入力層＋M2飛行力学＋M3コースと幾何を実装済み・140テスト緑）／次=M4試験ロジック
+- 状態: **M4完了**（M0雛形＋M1入力層＋M2飛行力学＋M3コースと幾何＋M4試験ロジック〔課目FSM・採点・指示音声/字幕・レポート〕・155テスト緑）／次=M5仕上げ
 - [DESIGN.md](DESIGN.md) — 全体設計（試験仕様・システム構成・マイルストーン）
 - [CLAUDE-CODE-PROMPT.md](CLAUDE-CODE-PROMPT.md) — Claude Codeに貼る開発プロンプト
 - [research/RESEARCH-2026-07-18.md](research/RESEARCH-2026-07-18.md) — 事前調査（一次資料の出典つき）
@@ -11,8 +11,8 @@
 
 ```bash
 cd ~/dev/drone-exam-sim && npm install && npm run dev   # ブラウザで飛ばす（Chrome推奨）
-npm test                                                # 140テスト
-# 開発の続き: claude を起動し CLAUDE-CODE-PROMPT.md を貼って「M4から」と指示
+npm test                                                # 155テスト
+# 開発の続き: claude を起動し CLAUDE-CODE-PROMPT.md を貼って「M5から」と指示
 ```
 
 ## ハードウェア前提

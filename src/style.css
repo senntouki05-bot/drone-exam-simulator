@@ -50,6 +50,207 @@ body {
   width: 3em;
 }
 
+/* --- M4: 受験UI（課目開始・字幕・警告・トースト・レポート） --- */
+
+#exam-panel {
+  position: absolute;
+  top: 296px;
+  left: 12px;
+  width: 300px;
+  padding: 10px 14px;
+  background: rgba(20, 20, 24, 0.72);
+  color: #f2f2f2;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#exam-panel .ep-title {
+  font-size: 12px;
+  color: #9fb7d0;
+  margin-bottom: 6px;
+}
+
+#exam-panel .ep-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#exam-panel button {
+  padding: 6px 16px;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
+#exam-panel button:hover {
+  background: #4c8ae8;
+}
+
+#exam-panel .ep-score {
+  font-variant-numeric: tabular-nums;
+}
+
+#exam-panel .ep-status {
+  margin-top: 6px;
+  color: #ffd98a;
+}
+
+#exam-panel .ep-note {
+  margin-top: 6px;
+  color: #8f8f98;
+  font-size: 11px;
+}
+
+#exam-subtitle {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(760px, calc(100vw - 40px));
+  padding: 10px 20px;
+  background: rgba(20, 20, 24, 0.8);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 18px;
+  line-height: 1.5;
+  text-align: center;
+  pointer-events: none;
+}
+
+#exam-warning {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(200, 60, 40, 0.85);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+#exam-toasts {
+  position: absolute;
+  right: 12px;
+  bottom: 64px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.ep-toast {
+  padding: 8px 12px;
+  background: rgba(120, 84, 10, 0.88);
+  color: #ffe9b0;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ep-toast-fail {
+  background: rgba(150, 35, 30, 0.9);
+  color: #ffd7d7;
+}
+
+#report-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+
+#report-overlay[hidden] {
+  display: none;
+}
+
+.report-dialog {
+  width: min(640px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: #1e1e24;
+  color: #f2f2f2;
+  padding: 20px 26px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.report-dialog .rp-head {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.report-dialog .rp-points {
+  float: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-dialog .rp-pass {
+  color: #7ed88a;
+  font-weight: 700;
+}
+
+.report-dialog .rp-fail {
+  color: #ff7a7a;
+  font-weight: 700;
+}
+
+.report-dialog .rp-meta {
+  color: #b9b9c0;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.report-dialog canvas {
+  width: 100%;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.report-dialog .rp-tablewrap {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.report-dialog .rp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.report-dialog .rp-table th,
+.report-dialog .rp-table td {
+  text-align: left;
+  padding: 3px 8px;
+  border-bottom: 1px solid #35353f;
+}
+
+.report-dialog .rp-table th {
+  color: #9fb7d0;
+}
+
+.report-dialog button {
+  padding: 8px 22px;
+  font-size: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #3d7bd9;
+  color: #fff;
+  cursor: pointer;
+}
+
 /* --- M3: 区画HUDの色分け（自由帯=緑・減点=黄・不合格=赤） --- */
 
 #hud-zone.zone-free {

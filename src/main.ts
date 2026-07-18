@@ -1,15 +1,17 @@
 /**
  * main.ts — 配線: GameLoop（固定240Hz＋描画補間）× 入力層（Gamepad/キーボード）
  * × M2飛行力学（FlightDynamics: カスケード制御・GPS/ATTI・風・機体プロファイル）
- * × M3コース（data/courses/*.json: 描画・操縦者視点・幾何判定の目視用HUD）。
+ * × M3コース（data/courses/*.json: 描画・操縦者視点・幾何判定の目視用HUD）
+ * × M4受験（ExamSession: 課目FSM・採点・試験員指示。音声=InstructorVoice/ビープ=WarningBeep）。
  *
  * 入力の選択（M1）: キャリブレーション済みのゲームパッド接続中はGamepadManager、
  * それ以外はKeyboardInput。ウィザード表示中は機体を動かさない。
  * `?input=debug` で入力デバッグ画面（生軸・正規化4軸）を重ねる。
  *
- * 開発用キー: 1/2/3=課目切替・Z=区画帯表示・M=GPS/ATTI切替・V=風切替・C=機体切替・R=リセット。
- * （練習/試験モードの正式UIはM5。ここは動作確認用の最小導線）
- * M3のHUD区画表示は目視確認用: フェーズゲーティング（判定のON/OFF）と減点への変換はM4。
+ * 開発用キー: 1/2/3=課目切替・Z=区画帯表示・M=GPS/ATTI切替・V=風切替・C=機体切替・R=リセット
+ * （受験中はR=中止のみ有効）。Space/割当ボタン=安全確認の宣言。
+ * 受験は左パネルの「課目開始」から（練習/試験通しモードの正式UIはM5）。
+ * M3のHUD区画表示は常時判定の目視用で、受験の採点はExamSessionのフェーズゲーティングが正。
  */
 
 import * as THREE from 'three';
@@ -38,9 +40,13 @@ import {
   inHCircle,
   pylonCollisionIndex,
 } from './exam/geometry';
+import { ExamSession, type ExamEvent } from './exam/ExamSession';
 import { DroneModel } from './render/DroneModel';
 import { CourseMarkers } from './render/CourseMarkers';
 import { createBlobShadow, createGymScene, updateBlobShadow } from './render/Scene';
+import { ExamPanel } from './ui/ExamPanel';
+import { InstructorVoice } from './ui/InstructorVoice';
+import { WarningBeep } from './ui/WarningBeep';
 
 // --- DOM ---
 const app = document.getElementById('app')!;
@@ -94,7 +100,7 @@ const drone = new FlightDynamics({
   wind,
   seed: windSeedBase ^ 0x9e3779b9,
 });
-/** 風イベントの受け皿（M4で採点系へ流す。M2では毎フレーム破棄するだけ） */
+/** 風イベントの受け皿（毎ステップdrainし、受験中はExamSessionの突風猶予窓へ渡す） */
 const windEvents: WindEvent[] = [];
 
 const keyboard = new KeyboardInput();
@@ -177,9 +183,78 @@ function setCourse(index: number): void {
   lookTarget.set(worldXZ.x, 0.5, worldXZ.z);
 }
 
+// --- M4: 受験セッション ---
+let session: ExamSession | null = null;
+const voice = new InstructorVoice();
+const beep = new WarningBeep();
+const examEvents: ExamEvent[] = [];
+let declarePrev = false;
+// ExamSampleはdrone.stateの参照を使い回す（毎ステップのアロケーション回避。modeのみ毎回更新）
+const examSample = {
+  p: drone.state.p,
+  v: drone.state.v,
+  q: drone.state.q,
+  mode: drone.mode,
+};
+
+function examActive(): boolean {
+  return session !== null && !session.finished;
+}
+
+function startExam(): void {
+  if (examActive()) return;
+  // クリックハンドラ内でAudio/TTSをアンロック（Chromeの自動再生制限対策）
+  beep.resume();
+  voice.prime();
+  const course = COURSES[courseIndex];
+  drone.setMode(course.flightMode);
+  resetDrone();
+  markers?.setZonesVisible(false); // 受験中は区画帯非表示（実試験相当）
+  declarePrev = false;
+  session = new ExamSession({
+    course,
+    machineRadiusM: drone.profile.radiusM,
+    random: Math.random,
+    direction: 'random',
+    onInstruction: (i) => {
+      examPanel.showInstruction(i.text);
+      voice.speak(i.text);
+    },
+    onWarning: (w) => {
+      beep.warning();
+      examPanel.flashWarning(w.message);
+    },
+    onDeduction: (d) => {
+      if (d.immediate) beep.fail();
+      else beep.deduct();
+      examPanel.addToast(d);
+      if (session) examPanel.setScore(session.points);
+    },
+    onFinished: (r) => {
+      voice.cancel();
+      examPanel.setIdle();
+      examPanel.setScore(r.points);
+      markers?.setZonesVisible(zonesVisible);
+      if (r.endReason !== 'aborted') examPanel.showReport(r, course);
+    },
+  });
+  examPanel.setRunning(course.name);
+  examPanel.setScore(session.points);
+}
+
+function abortExam(): void {
+  session?.abort();
+}
+
+const examPanel = new ExamPanel(app, { onStart: startExam, onAbort: abortExam });
+
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') {
+    if (examActive()) abortExam();
     resetDrone();
+  } else if (examActive()) {
+    // 受験中は開発用キーを無効化（モード・課目・機体・風は固定）
+    return;
   } else if (e.code === 'KeyM') {
     drone.setMode(drone.mode === 'gps' ? 'atti' : 'gps');
   } else if (e.code === 'KeyV') {
@@ -293,11 +368,25 @@ const loop = new GameLoop({
     wind.update(dt, tSim);
     drone.step(dt, controls);
     takeSnapshot(drone.state, currSnap);
-    // 巻き数は物理レートで毎サンプル追跡（4-2のみ。セグメント確定の解釈はM4）
+    // 巻き数は物理レートで毎サンプル追跡（4-2のみ・HUD表示用。採点用はExamSessionが内部で持つ）
     if (winding) {
       worldToCourse(drone.state.p.x, drone.state.p.z, courseXZ);
       winding.update(courseXZ.x, courseXZ.z);
     }
+    // --- M4: 受験セッションへサンプル＋イベント（宣言・突風）を毎ステップ供給 ---
+    const windCount = wind.drainEvents(windEvents);
+    if (session && !session.finished) {
+      examEvents.length = 0;
+      const declareNow = keyboard.declarePressed || gamepad.declarePressed;
+      if (declareNow && !declarePrev) examEvents.push({ t: tSim, type: 'declare' });
+      declarePrev = declareNow;
+      for (let i = 0; i < windCount; i++) {
+        examEvents.push({ t: windEvents[i].t, type: windEvents[i].type });
+      }
+      examSample.mode = drone.mode;
+      session.step(tSim, examSample, examEvents);
+    }
+    windEvents.length = 0;
   },
   render: (alpha) => {
     const x = lerp(prevSnap.x, currSnap.x, alpha);
@@ -315,9 +404,6 @@ const loop = new GameLoop({
     lookGoal.set(x, y + 0.1, z);
     lookTarget.lerp(lookGoal, 0.18);
     camera.lookAt(lookTarget);
-
-    // 風イベントはM4で採点系へ流す。M2では溜めない（破棄）
-    if (wind.drainEvents(windEvents) > 0) windEvents.length = 0;
 
     const altText = `${y.toFixed(1)} m`;
     if (altText !== lastAlt) {
