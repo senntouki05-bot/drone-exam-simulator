@@ -189,7 +189,16 @@ export class CourseMarkers {
 
   private buildHRing(course: Course): void {
     const geo = this.track(new THREE.RingGeometry(H_PAD_RADIUS - 0.05, H_PAD_RADIUS + 0.05, 64));
-    const mat = this.track(new THREE.MeshBasicMaterial({ color: 0xf5f2e8 }));
+    const mat = this.track(
+      new THREE.MeshStandardMaterial({
+        color: 0xf5f2e8,
+        roughness: 0.2,
+        metalness: 0.1,
+        emissive: 0xf5f2e8,
+        emissiveIntensity: 0.2,
+        side: THREE.DoubleSide,
+      }),
+    );
     const ring = new THREE.Mesh(geo, mat);
     ring.rotation.x = -Math.PI / 2;
     const w = { x: 0, z: 0 };
@@ -255,9 +264,23 @@ export class CourseMarkers {
     const bandGeo = this.track(
       new THREE.CylinderGeometry(radiusM * 0.5, radiusM * 0.68, heightM * 0.17, 20, 1, true),
     );
-    const orangeMat = this.track(new THREE.MeshLambertMaterial({ color: 0xff5a1f }));
+    const orangeMat = this.track(
+      new THREE.MeshPhysicalMaterial({
+        color: 0xff5a1f,
+        roughness: 0.3,
+        metalness: 0.1,
+        clearcoat: 0.4,
+        clearcoatRoughness: 0.2,
+      }),
+    );
     const whiteMat = this.track(
-      new THREE.MeshLambertMaterial({ color: 0xf5f5f0, side: THREE.DoubleSide }),
+      new THREE.MeshPhysicalMaterial({
+        color: 0xf5f5f0,
+        roughness: 0.2,
+        metalness: 0.05,
+        clearcoat: 0.3,
+        side: THREE.DoubleSide,
+      }),
     );
 
     const w = { x: 0, z: 0 };
@@ -265,6 +288,7 @@ export class CourseMarkers {
       const pylon = new THREE.Group();
       const cone = new THREE.Mesh(coneGeo, orangeMat);
       cone.position.y = heightM / 2;
+      cone.castShadow = true;
       const base = new THREE.Mesh(baseGeo, orangeMat);
       base.position.y = 0.01;
       const band = new THREE.Mesh(bandGeo, whiteMat);

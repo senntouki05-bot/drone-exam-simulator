@@ -59,10 +59,16 @@ import { CourseMarkers, computeCourseBBox } from './render/CourseMarkers';
 import { MiniMap } from './render/MiniMap';
 import {
   createBlobShadow,
+  createEnvHDRI,
   createGymScene,
   createOutdoorScene,
   updateBlobShadow,
 } from './render/Scene';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ExamPanel } from './ui/ExamPanel';
 import { PracticePanel, type CameraMode, type SceneKind } from './ui/PracticePanel';
 import { InstructorVoice } from './ui/InstructorVoice';
@@ -90,19 +96,52 @@ sideCol.id = 'side-col';
 app.appendChild(sideCol);
 
 // --- レンダラ・シーン（屋内/屋外の2種を起動時に生成し、参照を差し替える） ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.prepend(renderer.domElement);
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
-const gymScene = createGymScene();
-const outdoorScene = createOutdoorScene();
+const gymScene = createGymScene(maxAniso);
+const outdoorScene = createOutdoorScene(maxAniso);
 let scene = gymScene;
+
+// 手続きHDRIをPMREM化して両シーンの環境マップに（PBRの反射・IBL）
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMap = pmrem.fromEquirectangular(createEnvHDRI()).texture;
+gymScene.environment = envMap;
+gymScene.environmentIntensity = 0.55;
+outdoorScene.environment = envMap;
+outdoorScene.environmentIntensity = 0.55;
+
 const blobShadow = createBlobShadow(scene);
 const droneModel = new DroneModel();
 scene.add(droneModel.group);
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.05, 100);
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 400);
+
+// ポストプロセス（SSAO=接触遮蔽 + UnrealBloom=発光の滲み）。シーン切替時に scene を差し替える
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+ssaoPass.kernelRadius = 16;
+ssaoPass.minDistance = 0.004;
+ssaoPass.maxDistance = 0.12;
+composer.addPass(ssaoPass);
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.28,
+  0.7,
+  0.92,
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
 // 視点位置は課目定義（Course.pilot）から setCourse() で設定する
 const lookTarget = new THREE.Vector3(0, 0.5, 0);
 const lookGoal = new THREE.Vector3();
@@ -115,6 +154,8 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  ssaoPass.setSize(window.innerWidth, window.innerHeight);
 });
 
 /** シーン切替: three.jsのadd()は付け替え（旧シーンから自動で外れる）を利用する */
@@ -123,6 +164,8 @@ function setScene(kind: SceneKind): void {
   scene.add(droneModel.group);
   scene.add(blobShadow);
   if (markers) scene.add(markers.group);
+  renderPass.scene = scene;
+  ssaoPass.scene = scene;
 }
 
 // --- シム（M2: 機体プロファイル・風はデータ駆動） ---
@@ -928,7 +971,7 @@ const loop = new GameLoop({
       debugOverlay.update(debugView);
     }
 
-    renderer.render(scene, camera);
+    composer.render();
   },
   onAutoPause: () => {
     pauseOverlay.hidden = false;
