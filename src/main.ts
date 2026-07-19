@@ -147,22 +147,27 @@ function setWindPreset(index: number): void {
   drone.setWind(wind);
 }
 
-/** 風スライダー（カスタム風）: 定常+突風ピークを実施中止基準5m/s未満に収める */
+/**
+ * 風スライダー（カスタム風）: 瞬時風速の上限（定常+突風ピーク+乱流振幅）を
+ * 実施中止基準5m/s未満に収める。突風ピークは乱流ぶんも予算に入れて頭打ちにする
+ * （turbAmp=steady*0.13 を差し引く）。スライダー範囲[0,3.5]では ampMin≤ampMax が保たれる。
+ */
 function setWindCustom(steadyMs: number, gusts: boolean): void {
+  const turbAmp = steadyMs * 0.13;
   const config: WindConfig = {
     steadyMs,
     steadyDirDeg: Math.random() * 360,
     gust: {
       enabled: gusts && steadyMs > 0,
       ampMinMs: Math.min(0.4, steadyMs * 0.3),
-      ampMaxMs: Math.max(0.1, Math.min(1.4, 4.8 - steadyMs)),
+      ampMaxMs: Math.max(0.1, Math.min(1.4, 4.9 - steadyMs - turbAmp)),
       intervalMinS: 4,
       intervalMaxS: 10,
       durMinS: 1.5,
       durMaxS: 3.5,
       tauS: 1.0,
     },
-    turbulence: { ampMs: steadyMs * 0.13, freqHz: 0.7 },
+    turbulence: { ampMs: turbAmp, freqHz: 0.7 },
   };
   windSeedCounter++;
   wind = new WindModel(config, windSeedBase + windSeedCounter);
@@ -266,6 +271,8 @@ let series: ExamSeries | null = null;
 let pendingSeries: ExamSeriesResult | null = null;
 /** 通し試験「不合格でも続行」設定（startSeries時にパネルから確定） */
 let seriesContinueOnFail = false;
+/** 通し試験をユーザーが中止したか（abortExam→finishSeriesUiで履歴記録を抑止するフラグ） */
+let seriesAborting = false;
 const voice = new InstructorVoice();
 const beep = new WarningBeep();
 const history = new ScoreHistory();
@@ -285,6 +292,8 @@ let lastRecording: ReplayRecording | null = null;
 let loadedRecording: ReplayRecording | null = null;
 let player: ReplayPlayer | null = null;
 let playbackT = 0;
+/** リプレイ再生中の水平対地速度 [m/s]（物理が止まるため位置差分から算出・HUD表示用） */
+let replaySpeedMs = 0;
 const replayBuf = {
   p: { x: 0, y: 0, z: 0 },
   q: { x: 0, y: 0, z: 0, w: 1 },
@@ -385,6 +394,7 @@ function startSeries(): void {
   appMode = 'series';
   declarePrev = false;
   pendingSeries = null;
+  seriesAborting = false;
   seriesContinueOnFail = examPanel.getContinueOnFail();
   practicePanel.setEnabled(false);
   minimap.setVisible(false);
@@ -458,11 +468,9 @@ function finishSeriesUi(sr: ExamSeriesResult): void {
   markers?.setZonesVisible(zonesVisible);
   minimap.setVisible(true);
   const lastR = sr.results[sr.results.length - 1] ?? null;
-  // ユーザー中止の判定: 課目実行中の中止(aborted) or 課目間での中止(endedEarly かつ 最後が completed)
-  const userAborted =
-    lastR === null ||
-    lastR.endReason === 'aborted' ||
-    (sr.endedEarly && lastR.endReason === 'completed');
+  // ユーザー中止（課目実行中・課目間のどちらもabortExam経由でseriesAbortingが立つ）は履歴に残さない。
+  // 直前課目の合否に依らず「中止して閉じる」/Rは一律に中止扱いにする（continueOnFail時も含む）。
+  const userAborted = seriesAborting || lastR === null;
   if (!userAborted && lastR !== null) {
     history.add({
       at: new Date().toISOString(),
@@ -477,12 +485,19 @@ function finishSeriesUi(sr: ExamSeriesResult): void {
       elapsedS: sr.results.reduce((acc, r) => acc + r.elapsedS, 0),
     });
   }
+  seriesAborting = false;
   series = null;
 }
 
 function abortExam(): void {
-  if (series && !series.finished) series.abort();
-  else session?.abort();
+  if (series && !series.finished) {
+    // 課目間レポート表示中にRで中止するとモーダルが残るため明示的に閉じる
+    examPanel.hideReport();
+    seriesAborting = true;
+    series.abort();
+  } else {
+    session?.abort();
+  }
 }
 
 // --- リプレイ再生 ---
@@ -751,6 +766,8 @@ const loop = new GameLoop({
       currSnap.pitchRad = -tmpEuler.x;
       currSnap.rollRad = -tmpEuler.z;
       currSnap.rotorSpin += 55 * dt;
+      // 物理vが凍結するため、再生位置の差分から水平速度をHUD用に算出
+      replaySpeedMs = dt > 0 ? Math.hypot(currSnap.x - prevSnap.x, currSnap.z - prevSnap.z) / dt : 0;
       if (playbackT > player.durationS + 0.8) stopReplay();
       return;
     }
@@ -833,7 +850,8 @@ const loop = new GameLoop({
       hudAlt.textContent = altText;
       lastAlt = altText;
     }
-    const spdText = `${horizontalSpeed(drone.state.v).toFixed(1)} m/s`;
+    const spdMs = appMode === 'replay' ? replaySpeedMs : horizontalSpeed(drone.state.v);
+    const spdText = `${spdMs.toFixed(1)} m/s`;
     if (spdText !== lastSpd) {
       hudSpd.textContent = spdText;
       lastSpd = spdText;
