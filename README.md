@@ -3,6 +3,7 @@
 二等無人航空機操縦士（回転翼航空機・マルチローター・基本）実地試験の**実技シミュレータ**。実物のプロポをUSB接続（Gamepad API）し、ブラウザ上で実技3課目を試験と同じコース寸法・減点基準で練習する。バックエンドなしの完全静的Webアプリ（Chrome推奨）。
 
 - 状態: **M5完了**（M0〜M5全実装。テスト件数は `npm test` 参照）
+- デモ（公開中）: **https://drone-exam-sim.pages.dev/** — プロポ未接続でもキーボードで操作可（画面右上・下部の操作案内参照）
 - 仕様の正本: [CLAUDE-CODE-PROMPT.md](CLAUDE-CODE-PROMPT.md) ／ 全体設計: [DESIGN.md](DESIGN.md) ／ 事前調査（一次資料の出典つき）: [research/RESEARCH-2026-07-18.md](research/RESEARCH-2026-07-18.md)
 
 ## 概要（何ができるか）
@@ -116,7 +117,7 @@ npm run build   # 本番ビルド（tsc + vite build → dist/）
 
 ## Cloudflare Pages デプロイ手順
 
-> **注意: 実デプロイはまだ行っていない**（手順の記載まで。公開するかはオーナー判断）。
+> **公開中**: https://drone-exam-sim.pages.dev/ （2026-07-19 初回デプロイ・production branch=main）。以降の更新は下記コマンドを再実行するだけで同URLへ反映される。
 
 ```bash
 cd ~/dev/drone-exam-sim
@@ -124,9 +125,10 @@ npm run build                                                          # dist/ �
 npx wrangler pages deploy dist --project-name drone-exam-sim --branch main
 ```
 
-- 初回実行時にPagesプロジェクト `drone-exam-sim` が作成される（wranglerのログイン済み前提）
+- Pagesプロジェクト `drone-exam-sim` は作成済み（`wrangler pages project create` 済み・wranglerログイン済み前提）
 - 完全静的（バックエンドなし・外部CDN読み込みなし）のため、Pages側の追加設定は不要
 - PagesはHTTPS配信なので、Gamepad APIのsecure context要件も満たす
+- 現状 **Cloudflare Access 未設定＝URLを知る誰でも閲覧可**（秘密・ユーザーデータを持たない静的デモのため許容。限定公開したい場合はPages側でAccessを設定）
 
 ## 開発
 
