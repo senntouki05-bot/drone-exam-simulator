@@ -1,0 +1,12 @@
+# drone-exam-sim — Cloudflare Pages セキュリティヘッダ
+# vite(root=リポ直下・publicDir=public)がビルドで dist/_headers へコピーする。
+# 検証(2026-07-30): インライン<script>/<style>・style=属性・JSによる<style>注入すべて0、
+#   依存はthree.jsコアのみ＝script-src 'self' / style-src 'self' を厳格維持できる。
+#   ただしWebGLのテクスチャ読込(new Image経由=img-src対象)とworkerのため data:/blob: のみ許可（描画保険）。
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; media-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
