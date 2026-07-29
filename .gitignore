@@ -2,3 +2,9 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# 秘密情報
+.env
+.env.*
+.dev.vars
+.dev.vars.*
