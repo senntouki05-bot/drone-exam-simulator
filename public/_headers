@@ -4,7 +4,7 @@
 #   依存はthree.jsコアのみ＝script-src 'self' / style-src 'self' を厳格維持できる。
 #   ただしWebGLのテクスチャ読込(new Image経由=img-src対象)とworkerのため data:/blob: のみ許可（描画保険）。
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; media-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://quirio-analytics.wataru-okada.workers.dev; worker-src 'self' blob:; media-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
