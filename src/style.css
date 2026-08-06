@@ -416,6 +416,22 @@ body {
   pointer-events: none;
 }
 
+/* 操作ヘルプ帯の右端に置く法務リンク。
+   #help は pointer-events:none なので、ここだけ明示的に戻さないと押せない。 */
+#help-legal {
+  pointer-events: auto;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+#help-legal a {
+  color: #9ec5ff;
+  text-decoration: none;
+}
+#help-legal a:hover {
+  text-decoration: underline;
+}
+
 #pause-overlay {
   position: absolute;
   inset: 0;
