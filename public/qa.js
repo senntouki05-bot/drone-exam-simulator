@@ -12,6 +12,9 @@
   'use strict';
   var ENDPOINT = 'https://quirio-analytics.wataru-okada.workers.dev/e';
   var SITE = 'drone-exam-sim';
+  // このサイトで「#」がページの識別子か（src/sites.js の hashRoutes）。
+  // false のサイトでハッシュを数えると、目次リンクを押しただけでPVが増える。
+  var HASH_IS_ROUTE = false;
 
   // --- 除外判定 -----------------------------------------------------------
   try {
@@ -81,8 +84,12 @@
     send({ t: 'ex', id: view.id, d: Math.round(dwell), sc: scroll });
   }
 
+  function here() {
+    return HASH_IS_ROUTE ? location.pathname + location.hash : location.pathname;
+  }
+
   function start(ref) {
-    view = { id: uid(), path: location.pathname + location.hash };
+    view = { id: uid(), path: here() };
     scroll = 0; dwell = 0; since = nowMs(); sent = false;
     measureScroll();
     send({
@@ -109,8 +116,10 @@
 
   // SPA のルート変更を新しいページビューとして数える。
   // これをやらないと、SPA のサイトは全部の流入が "/" に潰れて離脱率が意味を失う。
+  // 逆に、ハッシュがただのアンカーであるサイトで数えると水増しになるので、
+  // hashchange を聞くかどうかはサイトごとに切り替える。
   function navigated() {
-    var path = location.pathname + location.hash;
+    var path = here();
     if (view && path === view.path) return;
     var from = location.origin + (view ? view.path : '');
     flush();
@@ -126,7 +135,9 @@
     };
   });
   window.addEventListener('popstate', function () { setTimeout(navigated, 0); });
-  window.addEventListener('hashchange', function () { setTimeout(navigated, 0); });
+  if (HASH_IS_ROUTE) {
+    window.addEventListener('hashchange', function () { setTimeout(navigated, 0); });
+  }
 
   start(document.referrer || '');
 })();
